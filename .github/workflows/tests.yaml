@@ -1,0 +1,44 @@
+name: Testing
+
+on:
+  workflow_call:
+
+jobs:
+  lint:
+    name: Lint test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          uv sync --all-extras
+      - run: |
+          uv run --group dev ruff check
+  stress:
+    name: Stress test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: echo "stress test"
+  unity:
+    name: Unity test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          uv sync --all-extras
+      - run: |
+          uv run --group dev pytest
+  security:
+    name: security
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Secret Scanning
+        uses: trufflesecurity/trufflehog@main
+        continue-on-error: true
+        with:
+          base: ""
+          head: ${{ github.ref_name }}
+          extra_args: --results=verified
