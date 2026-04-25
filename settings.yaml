@@ -1,0 +1,7 @@
+modules_search_paths:
+  - dskity.modules
+  - modules
+
+modules:
+  health:
+    enabled: true

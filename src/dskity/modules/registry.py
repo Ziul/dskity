@@ -1,0 +1,63 @@
+from __future__ import annotations
+
+import importlib
+import pkgutil
+from dataclasses import dataclass
+from typing import Any, Iterable
+
+from dskity.modules.contracts import Module
+
+
+@dataclass(frozen=True)
+class ModuleRegistry:
+    modules: tuple[Module, ...]
+
+    @classmethod
+    def from_package(cls, package: str) -> "ModuleRegistry":
+        imported = importlib.import_module(package)
+        discovered: list[Module] = []
+
+        for modinfo in pkgutil.iter_modules(imported.__path__, imported.__name__ + "."):
+            # Espera-se um subpackage por módulo, com módulo `module.py` expondo `get_module()`
+            try:
+                module_impl = importlib.import_module(modinfo.name + ".module")
+            except ModuleNotFoundError:
+                continue
+
+            get_module = getattr(module_impl, "get_module", None)
+            if callable(get_module):
+                discovered.append(get_module())
+
+        return cls(modules=tuple(discovered))
+
+    def enabled_modules(self, config: Any) -> Iterable[Module]:
+        cfg = config or {}
+
+        modules_cfg: Any = {}
+        if isinstance(cfg, dict):
+            modules_cfg = cfg.get("modules")
+        else:
+            modules_cfg = getattr(cfg, "modules", None)
+
+        if modules_cfg is None:
+            modules_cfg = {}
+
+        for module in self.modules:
+            # Novo padrão: modules.<name>.enabled
+            module_cfg = None
+            if isinstance(modules_cfg, dict):
+                module_cfg = modules_cfg.get(module.meta.name)
+            elif hasattr(modules_cfg, "get"):
+                module_cfg = modules_cfg.get(module.meta.name)
+
+            if isinstance(module_cfg, dict) and "enabled" in module_cfg:
+                enabled = bool(module_cfg.get("enabled"))
+            elif hasattr(module_cfg, "enabled"):
+                enabled = bool(getattr(module_cfg, "enabled"))
+            else:
+                # Compat: formato antigo (<name>.enabled)
+                legacy_cfg = cfg.get(module.meta.name, {}) if isinstance(cfg, dict) else {}
+                enabled = bool(getattr(legacy_cfg, "get", lambda *_: True)("enabled", True))
+
+            if enabled:
+                yield module
