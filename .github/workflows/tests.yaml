@@ -8,7 +8,7 @@ jobs:
     name: Lint test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - run: |
           curl -LsSf https://astral.sh/uv/install.sh | sh
           uv sync --all-extras
@@ -18,13 +18,13 @@ jobs:
     name: Stress test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - run: echo "stress test"
   unity:
     name: Unity test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - run: |
           curl -LsSf https://astral.sh/uv/install.sh | sh
           uv sync --all-extras
@@ -34,7 +34,7 @@ jobs:
     name: security
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Secret Scanning
         uses: trufflesecurity/trufflehog@main
         continue-on-error: true

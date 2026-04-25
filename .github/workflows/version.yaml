@@ -28,7 +28,7 @@ jobs:
       FullSemVer: ${{ steps.output.outputs.FullSemVer }}
       EscapedBranchName: ${{ steps.output.outputs.EscapedBranchName }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
       - name: Install GitVersion
