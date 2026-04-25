@@ -42,7 +42,7 @@ class RequestIdASGIMiddleware:
 
         token = _request_id_ctx.set(request_id)
 
-        # Deixa disponível via request.state.request_id (Starlette usa scope['state']).
+        # Make available via request.state.request_id (Starlette uses scope['state']).
         state = scope.setdefault("state", {})
         state["request_id"] = request_id
 

@@ -29,7 +29,7 @@ class KvStoreModule(Module):
             app.state.kvstore_store = store_name
             app.state.registry_store = RegistryStore(backend=backend)
 
-        # Reusa o instance_id global (se existir), para consistência entre módulos.
+        # Reuse the global instance_id (if present) for consistency between modules.
         node_id = getattr(app.state, "instance_id", node_id)
 
         router = APIRouter(tags=[self.meta.name])
@@ -40,7 +40,7 @@ class KvStoreModule(Module):
                 return None
             if owner.id == node_id:
                 return None
-            # 307 preserva método e body (PUT/DELETE também).
+            # 307 preserves method and body (also for PUT/DELETE).
             return RedirectResponse(url=f"{owner.base_url}/kv/{key}", status_code=307)
 
         @router.get("/kv/ring")

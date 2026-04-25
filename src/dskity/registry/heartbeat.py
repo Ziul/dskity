@@ -18,8 +18,8 @@ class HeartbeatConfig:
 
 def _get_advertise_base_url() -> str | None:
     """
-    Determina a base_url via socket descoberta.
-    NÃO usa fallback de porta - deixa para o middleware usar request.url.port
+    Determine the base IP via socket discovery.
+    DOES NOT use a port fallback - the middleware should use request.url.port
     """
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -41,10 +41,10 @@ def start_heartbeat(app: FastAPI, *, cfg: HeartbeatConfig) -> None:
 
     async def loop() -> None:
         reg = ServiceRegistry(store=app.state.registry_store)
-        # Tenta usar advertise_url se configurado explicitamente
+        # Try to use advertise_url if explicitly configured
         advertise_url = str(getattr(app.state, "advertise_url", None))
 
-        # Se não há advertise_url, o middleware per-request cuidará do registro
+        # If there's no advertise_url, the per-request middleware will handle registration
         if not advertise_url:
             return
 

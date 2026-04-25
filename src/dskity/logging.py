@@ -23,8 +23,8 @@ def build_logging_config(*, level: str | None = None) -> dict[str, Any]:
     lvl = (level or _level_from_env()).upper()
 
     default_fmt = "%(asctime)s %(levelname)s %(name)s request_id=%(request_id)s - %(message)s"
-    # Para uvicorn.access, usar %(message)s é o mais robusto: o Uvicorn já gera
-    # a linha de acesso e nem todo LogRecord terá client_addr/request_line/status_code.
+    # For uvicorn.access, using %(message)s is more robust: Uvicorn already formats
+    # the access line and not every LogRecord will have client_addr/request_line/status_code.
     access_fmt = "%(asctime)s %(levelname)s %(name)s request_id=%(request_id)s - %(message)s"
 
     return {
@@ -34,8 +34,8 @@ def build_logging_config(*, level: str | None = None) -> dict[str, Any]:
             "request_id": {"()": "dskity.logging.RequestIdFilter"},
         },
         "formatters": {
-            # Importante: uvicorn.access não popula client_addr/request_line/status_code
-            # em um formatter padrão; precisa do AccessFormatter do Uvicorn.
+            # Important: uvicorn.access does not populate client_addr/request_line/status_code
+            # in a standard formatter; it requires Uvicorn's AccessFormatter.
             "default": {"()": "uvicorn.logging.DefaultFormatter", "fmt": default_fmt, "use_colors": None},
             "access": {"()": "uvicorn.logging.AccessFormatter", "fmt": access_fmt, "use_colors": None},
         },
@@ -64,7 +64,7 @@ def build_logging_config(*, level: str | None = None) -> dict[str, Any]:
             "uvicorn.access": {"level": lvl, "handlers": ["access_console"], "propagate": False},
             # FastAPI
             "fastapi": {"level": lvl, "handlers": ["console"], "propagate": False},
-            # fastapi-cli (nomes mais comuns)
+            # fastapi-cli (common names)
             "fastapi_cli": {"level": lvl, "handlers": ["console"], "propagate": False},
             "fastapi-cli": {"level": lvl, "handlers": ["console"], "propagate": False},
             # App

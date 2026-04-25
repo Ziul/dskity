@@ -61,38 +61,38 @@ def _read_config_file(path: str | Path, *, optional: bool = False) -> dict[str, 
             data = yaml.safe_load(f) or {}
 
     if not isinstance(data, dict):
-        raise ValueError(f"Config deve ser um objeto no topo: {path}")
+        raise ValueError(f"Config must be a top-level mapping: {path}")
     return data
 
 
 def load_config(override_path: str | None = None) -> DSkitySettings:
-    """Carrega configuração com suporte a TOML, YAML e variáveis de ambiente.
+    """Load configuration with support for TOML, YAML and environment variables.
 
-    Ordem de precedência (maior para menor):
-    1. Variáveis de ambiente (DSKITY_*)
-    2. Arquivo de override (--config)
-    3. settings.toml (ou settings.yaml como fallback) no diretório atual
-    4. Valores padrão
+    Precedence (highest to lowest):
+    1. Environment variables (DSKITY_*)
+    2. Override file (--config)
+    3. settings.toml (or settings.yaml as fallback) in current directory
+    4. Default values
 
-    Variáveis de ambiente:
-    - Prefixo: DSKITY_
-    - Separador de hierarquia: __ (dois underscores)
+    Environment variables:
+    - Prefix: DSKITY_
+    - Hierarchy separator: __ (two underscores)
 
-    Exemplos:
+    Examples:
     - DSKITY_COMMON__INTERNAL_BASE_URL="http://api.example.com"
     - DSKITY_KV__STORE="redis"
     - DSKITY_MODULES__PERSON__DATABASE__URL="postgresql://user:pass@localhost/db"
 
     Args:
-        override_path: Caminho opcional para YAML de override
+        override_path: Optional path to an override YAML/TOML file
 
     Returns:
-        DSkitySettings com todas as configurações validadas
+        DSkitySettings with all values validated
     """
     default_path = _default_config_path()
     base = _read_config_file(default_path, optional=True)
 
-    # Se override fornecido, faz deep merge (override > default settings.toml/settings.yaml)
+    # If an override is provided, perform a deep merge (override > default settings.toml/settings.yaml)
     if override_path:
         override_path_obj = Path(override_path)
         if override_path_obj.resolve() == default_path.resolve():
@@ -103,6 +103,6 @@ def load_config(override_path: str | None = None) -> DSkitySettings:
     else:
         config_dict = base
 
-    # Passa config_dict para load_config_from_yaml
-    # que cria DSkitySettings() com env vars tendo precedência
+    # Pass config_dict to load_config_from_yaml
+    # which creates a DSkitySettings instance with env vars taking precedence
     return load_config_from_yaml(config_dict)

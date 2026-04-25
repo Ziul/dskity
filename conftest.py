@@ -1,11 +1,11 @@
-"""Configuração global do pytest para todos os testes."""
+"""Global pytest configuration for all tests."""
 
 from __future__ import annotations
 
 import os
 
-# IMPORTANTE: Define variáveis de ambiente ANTES de qualquer importação
-# para evitar que módulos tentem conectar a bancos de dados reais
+# IMPORTANT: Set environment variables BEFORE any imports
+# to avoid modules attempting to connect to real databases
 if not os.getenv("BIOSTATION_PERSON_DATABASE_URL"):
     os.environ["BIOSTATION_PERSON_DATABASE_URL"] = "sqlite:///:memory:"
 
@@ -15,11 +15,11 @@ import pytest
 @pytest.fixture(scope="session", autouse=True)
 def setup_test_environment():
     """
-    Configura o ambiente de teste.
+    Set up the test environment.
 
-    A configuração de variáveis de ambiente foi movida para o nível de módulo
-    para garantir que seja executada antes de qualquer importação.
+    Environment variable configuration is performed at module level
+    to ensure it runs before any imports.
     """
     yield
 
-    # Cleanup opcional após todos os testes
+    # Optional cleanup after all tests

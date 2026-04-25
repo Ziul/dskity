@@ -15,11 +15,11 @@ class ModuleMeta:
 
 @dataclass(frozen=True)
 class TransportClients:
-    """Agrupa possíveis clientes/transportes que um módulo pode usar.
+    """Group possible transport clients a module may use.
 
-    - `http`: instancia `FastAPI` (HTTP server) ou `None`.
-    - `grpc`: servidor gRPC (tipo não anotado para evitar dependências diretas).
-    - `mqtt`: cliente MQTT singleton (implementation-defined) ou `None`.
+    - `http`: the `FastAPI` instance (HTTP server) or `None`.
+    - `grpc`: gRPC client/server wrapper (untyped to avoid direct dependency).
+    - `mqtt`: singleton MQTT client (implementation-defined) or `None`.
     """
 
     http: FastAPI | None = None

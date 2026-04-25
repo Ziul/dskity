@@ -112,7 +112,7 @@ class RedisKVBackend(KVBackend):
         prefix = (value or "").strip()
         if not prefix:
             return ""
-        # Mantém prefixo como namespace (evita colisões entre apps).
+        # Keep prefix as a namespace (avoid collisions between apps).
         if not prefix.endswith(":"):
             prefix += ":"
         return prefix
@@ -120,7 +120,7 @@ class RedisKVBackend(KVBackend):
     @classmethod
     def from_config(cls, config: dict) -> "RedisKVBackend":
         if redis is None:
-            raise RuntimeError("Dependência 'redis' não instalada. Instale com: uv sync --extra kvstore-redis")
+            raise RuntimeError("Redis dependency not installed. Install with: uv sync --extra kvstore-redis")
 
         kv_cfg = _kv_cfg(config)
         redis_cfg = (kv_cfg or {}).get("redis", {}) if isinstance(kv_cfg, dict) else {}
@@ -174,14 +174,14 @@ class RedisKVBackend(KVBackend):
         try:
             return json.loads(raw)
         except Exception:
-            # Compat: se alguém gravou string “crua”, retorna como string.
+            # Compat: if someone wrote a raw string, return it as-is.
             return raw
 
     def put(self, key: str, value: Any, ttl_seconds: int | None = None) -> None:
         try:
             payload = json.dumps(value, ensure_ascii=False, separators=(",", ":"))
         except TypeError as e:
-            raise TypeError("Valor não serializável em JSON para armazenamento no Redis") from e
+            raise TypeError("Value not JSON-serializable for storage in Redis") from e
         ttl = self._effective_ttl(ttl_seconds)
         if ttl is None:
             self.client.set(self._k(key), payload)
@@ -192,13 +192,13 @@ class RedisKVBackend(KVBackend):
         self.client.delete(self._k(key))
 
     def keys(self, prefix: str = "") -> list[str]:
-        # `SCAN` evita bloquear o Redis (ao contrário do KEYS).
+        # `SCAN` avoids blocking Redis (unlike KEYS).
         full_prefix = f"{self.key_prefix}{prefix}" if self.key_prefix else prefix
         match = f"{full_prefix}*" if full_prefix else "*"
 
         results: list[str] = []
         for k in self.client.scan_iter(match=match, count=1000):
-            # decode_responses=True → k já é str
+            # decode_responses=True → k is already a str
             if self.key_prefix and k.startswith(self.key_prefix):
                 k = k[len(self.key_prefix) :]
             if prefix and not k.startswith(prefix):
@@ -224,7 +224,7 @@ class ConsulKVBackend(KVBackend):
     def from_config(cls, config: dict) -> "ConsulKVBackend":
         if consul is None:
             raise RuntimeError(
-                "Dependência 'python-consul2' não instalada. Instale com: uv sync --extra kvstore-consul"
+                "Consul client dependency 'python-consul2' not installed. Install with: uv sync --extra kvstore-consul"
             )
 
         kv_cfg = _kv_cfg(config)
@@ -264,7 +264,7 @@ class ConsulKVBackend(KVBackend):
         return cls(client=client, key_prefix=key_prefix, default_ttl_seconds=default_ttl_seconds)
 
     def _k(self, key: str) -> str:
-        # Consul KV usa chaves estilo path. Mantemos prefixo como namespace.
+        # Consul KV uses path-style keys. Keep prefix as a namespace.
         return f"{self.key_prefix}{key}" if self.key_prefix else key
 
     def get(self, key: str) -> Any:
@@ -285,12 +285,12 @@ class ConsulKVBackend(KVBackend):
             return raw_str
 
     def put(self, key: str, value: Any, ttl_seconds: int | None = None) -> None:
-        # Consul KV não tem TTL por chave “nativo” como Redis.
-        # Mantemos o TTL lógico no payload (registry) e ignoramos ttl_seconds aqui.
+        # Consul KV does not have per-key TTL like Redis.
+        # We keep logical TTL in the payload (registry) and ignore ttl_seconds here.
         try:
             payload = json.dumps(value, ensure_ascii=False, separators=(",", ":"))
         except TypeError as e:
-            raise TypeError("Valor não serializável em JSON para armazenamento no Consul") from e
+            raise TypeError("Value not JSON-serializable for storage in Consul") from e
 
         self.client.kv.put(self._k(key), payload)
 
@@ -300,7 +300,7 @@ class ConsulKVBackend(KVBackend):
     def keys(self, prefix: str = "") -> list[str]:
         full_prefix = self._k(prefix) if prefix else (self.key_prefix or "")
 
-        # keys=True retorna apenas a lista de chaves, recurse=True inclui subpaths.
+        # keys=True returns only the list of keys, recurse=True includes subpaths.
         _, keys = self.client.kv.get(full_prefix, keys=True, recurse=True)
         if not keys:
             return []
@@ -330,19 +330,19 @@ def backend_from_config(config: dict | DSkitySettings) -> tuple[str, KVBackend]:
         default_ttl_seconds = config.kv.default_ttl_seconds
     else:
         kv_cfg = _kv_cfg(config)
-        print(kv_cfg)
+        logger.debug("KV config: %s", kv_cfg)
         store = str(kv_cfg.get("store") or "inmemory").lower().strip()
         default_ttl_seconds = None
         if isinstance(kv_cfg, dict) and kv_cfg.get("default_ttl_seconds") is not None:
             default_ttl_seconds = int(kv_cfg.get("default_ttl_seconds"))
 
-    logger.info("Identificado kv.store='%s'", store)
+    logger.info("Detected kv.store='%s'", store)
     logger.debug("KV: %s", str(config))
     if store == "inmemory":
         return store, InMemoryKVBackend(default_ttl_seconds=default_ttl_seconds)
 
     if store == "redis":
-        # Redis backend já lê default_ttl_seconds do config também.
+        # Redis backend also reads default_ttl_seconds from the config.
         return store, RedisKVBackend.from_config(
             config.model_dump() if isinstance(config, DSkitySettings) else config
         )
@@ -352,8 +352,8 @@ def backend_from_config(config: dict | DSkitySettings) -> tuple[str, KVBackend]:
             config.model_dump() if isinstance(config, DSkitySettings) else config
         )
 
-    # Mantemos os nomes alinhados com o ecossistema (Cortex) e falhamos com erro explícito.
+    # Keep names aligned with ecosystem (Cortex) and fail with explicit errors.
     if store in {"etcd"}:
-        raise NotImplementedError(f"kv.store='{store}' ainda não implementado. Use 'inmemory' por enquanto.")
+        raise NotImplementedError(f"kv.store='{store}' is not implemented yet. Use 'inmemory' for now.")
 
-    raise ValueError(f"kv.store inválido: {store}")
+    raise ValueError(f"invalid kv.store: {store}")

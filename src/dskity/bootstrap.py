@@ -213,7 +213,7 @@ def bootstrap(app: FastAPI) -> None:
 
     if not discovered_by_name:
         logger.debug(
-            "Nenhum módulo encontrado em modules_search_paths=%s.",
+            "No modules found in modules_search_paths=%s.",
             modules_import_packages,
         )
 
@@ -226,10 +226,10 @@ def bootstrap(app: FastAPI) -> None:
 
     loaded_module_names = [m.meta.name for m in enabled_modules]
     if loaded_module_names:
-        logger.info("Módulos carregados com sucesso na API: %s", loaded_module_names)
+        logger.info("Modules loaded successfully in API: %s", loaded_module_names)
     else:
         logger.warning(
-            "Nenhum módulo habilitado foi carregado na API; modules_search_paths=%s",
+            "No enabled modules were loaded into the API; modules_search_paths=%s",
             app.state.modules_import_packages,
         )
 
@@ -237,16 +237,16 @@ def bootstrap(app: FastAPI) -> None:
         EnabledModuleInfo(name=m.meta.name, base_path=m.meta.base_path) for m in enabled_modules
     ]
 
-    # Cria objeto que agrupa os clientes de transporte disponíveis para os módulos.
-    mqtt_client = MQTTClient()  # singleton leve — não conecta automaticamente
+    # Create an object grouping transport clients available to modules.
+    mqtt_client = MQTTClient()  # lightweight singleton — does not auto-connect
     grpc_client = GRPCClient()
     clients = TransportClients(http=app, grpc=grpc_client, mqtt=mqtt_client)
 
     for module in enabled_modules:
         module.register(clients=clients, config=config)
 
-    # Se houver um store compartilhável (kvstore habilitado), expõe endpoints de discovery
-    # e auto-registra os módulos usando base_url inferido a partir das requests.
+    # If there is a shared store (kvstore enabled), expose discovery endpoints
+    # and auto-register modules using a base_url inferred from requests.
     if getattr(app.state, "registry_store", None) is not None:
         app.include_router(registry_router)
         app.add_middleware(RegistryAdvertiseMiddleware)

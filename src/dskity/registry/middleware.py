@@ -39,7 +39,6 @@ class RegistryAdvertiseMiddleware(BaseHTTPMiddleware):
 
         ttl_seconds = int(getattr(request.app.state, "registry_ttl_seconds", 60))
 
-        # Registra (ou atualiza) todas as rotas habilitadas deste processo.
         for mod in enabled:
             registry.register_instance(
                 service=mod.name,

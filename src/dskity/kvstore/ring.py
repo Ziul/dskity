@@ -17,7 +17,7 @@ class RingNode:
 class HashRing:
     def __init__(self, nodes: list[RingNode], vnodes: int = 64) -> None:
         if vnodes <= 0:
-            raise ValueError("vnodes deve ser > 0")
+            raise ValueError("vnodes must be > 0")
         self._nodes = nodes
         self._vnodes = vnodes
         self._points: list[tuple[int, RingNode]] = []
@@ -41,7 +41,7 @@ class HashRing:
 
     @staticmethod
     def _hash_int(value: str) -> int:
-        # sha1 suficiente para distribuição; mantemos 32 bits para simplificar.
+        # sha1 is sufficient for distribution; keep 32 bits to simplify.
         digest = hashlib.sha1(value.encode("utf-8")).digest()
         return int.from_bytes(digest[:4], byteorder="big", signed=False)
 
@@ -87,16 +87,16 @@ def ring_from_config(config: dict[str, Any]) -> tuple[HashRing, str]:
 
 
 def ring_from_runtime(app: Any, config: dict[str, Any], *, service: str = "kvstore") -> tuple[HashRing, str]:
-    """Monta o ring a partir do service discovery (registry) quando disponível.
+    """Build the ring from service discovery (registry) when available.
 
-    Padrão estilo Loki/Cortex: o conjunto de instâncias vem do KV (service discovery),
-    não de uma lista estática em config.
+    Loki/Cortex-style pattern: the set of instances comes from the KV (service discovery),
+    not from a static list in config.
 
-    - Usa `app.state.registry_store` se existir.
-    - Fallback: `kv.ring.nodes` (config estática).
+    - Uses `app.state.registry_store` if present.
+    - Fallback: `kv.ring.nodes` (static config).
     """
 
-    # Preferimos o instance_id global do processo (publicado no registry), se existir.
+    # Prefer the global process instance_id (published in the registry), if present.
     instance_id = getattr(getattr(app, "state", None), "instance_id", None)
 
     # config agora é DSkitySettings (Pydantic model)
@@ -134,11 +134,11 @@ def ring_from_runtime(app: Any, config: dict[str, Any], *, service: str = "kvsto
                 seen.add(iid)
                 nodes.append(RingNode(id=iid, base_url=base_url.rstrip("/")))
         except Exception:
-            # Fallback silencioso para config estática.
+            # Silent fallback to static config.
             nodes = []
 
     if not nodes:
-        # Tenta ler nodes da config estática (ring.nodes)
+        # Try reading nodes from static config (ring.nodes)
         raw_nodes = []
         if kv_cfg and kv_cfg.ring:
             raw_nodes = getattr(kv_cfg.ring, "nodes", []) or []

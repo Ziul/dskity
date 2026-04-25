@@ -14,7 +14,7 @@ def test_metrics_endpoint_is_exposed() -> None:
     resp = client.get("/metrics")
 
     assert resp.status_code == 200
-    # prometheus_client define o content type completo
+    # prometheus_client defines the full content type
     assert resp.headers.get("content-type", "").startswith("text/plain")
 
 
@@ -37,11 +37,11 @@ def test_http_request_metrics_are_recorded_for_routes() -> None:
 
     metrics = client.get("/metrics").text
 
-    # Confirma que as métricas customizadas existem e que houve contagem para /hello.
+    # Confirm custom metrics exist and that there was a count for /hello.
     assert "http_requests_total" in metrics
     assert "http_request_duration_seconds" in metrics
     assert 'route="/hello"' in metrics
     assert 'status="200"' in metrics
-    # Para 404, como não há rota registrada, usamos o path do scope.
+    # For 404, since there's no registered route, we use the scope path.
     assert 'route="/does-not-exist"' in metrics
     assert 'status="404"' in metrics

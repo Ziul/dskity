@@ -51,7 +51,7 @@ def test_request_id_is_available_during_response_start() -> None:
 
     @app.get("/ok")
     def ok() -> dict:
-        # Garante que o ContextVar também está presente durante a execução do handler.
+        # Ensure the ContextVar is also present during handler execution.
         assert get_request_id() == "rid-abc-123"
         return {"ok": True}
 
@@ -77,7 +77,7 @@ def test_request_id_is_available_during_response_start() -> None:
 
         async def send(message):
             if message.get("type") == "http.response.start":
-                # Esse é o momento em que o uvicorn.access costuma logar.
+                # This is the moment when uvicorn.access usually logs.
                 captured["rid"] = get_request_id()
 
         await app(scope, receive, send)

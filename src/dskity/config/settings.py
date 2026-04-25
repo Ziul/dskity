@@ -1,9 +1,9 @@
-"""Modelos Pydantic para configuração com suporte a variáveis de ambiente.
+"""Pydantic models for configuration with environment variable support.
 
-Usa pydantic-settings para automático descobrir e validar variáveis de ambiente
-com prefixo DSKITY_.
+Uses pydantic-settings to automatically discover and validate environment
+variables prefixed with DSKITY_.
 
-Exemplos de variáveis de ambiente:
+Examples of environment variables:
 - DSKITY_COMMON__INTERNAL_BASE_URL="http://api.example.com"
 - DSKITY_KV__STORE="redis"
 - DSKITY_KV__REDIS__URL="redis://localhost:6379"
@@ -21,7 +21,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class RegistrySettings(BaseModel):
-    """Configurações do service discovery (common.registry.*)"""
+    """Service discovery settings (common.registry.*)"""
 
     enabled: bool = True
     ttl_seconds: int = 60
@@ -29,7 +29,7 @@ class RegistrySettings(BaseModel):
 
 
 class CommonSettings(BaseModel):
-    """Configurações comuns (common.*)"""
+    """Common settings (common.*)"""
 
     internal_base_url: str = "http://127.0.0.1:8000"
     advertise_url: str | None = None
@@ -37,7 +37,7 @@ class CommonSettings(BaseModel):
 
 
 class RedisSettings(BaseModel):
-    """Configurações do Redis (kv.redis.*)"""
+    """Redis settings (kv.redis.*)"""
 
     url: str = "redis://127.0.0.1:6379/0"
     username: str | None = None
@@ -46,7 +46,7 @@ class RedisSettings(BaseModel):
 
 
 class ConsulSettings(BaseModel):
-    """Configurações do Consul (kv.consul.*)"""
+    """Consul settings (kv.consul.*)"""
 
     url: str = "http://127.0.0.1:8500"
     token: str | None = None
@@ -56,13 +56,13 @@ class ConsulSettings(BaseModel):
 
 
 class RingSettings(BaseModel):
-    """Configurações do ring (kv.ring.*)"""
+    """Ring settings (kv.ring.*)"""
 
     vnodes: int = 64
 
 
 class KvSettings(BaseModel):
-    """Configurações do backend KV (kv.*)"""
+    """KV backend settings (kv.*)"""
 
     store: str = "inmemory"  # inmemory, redis, consul
     default_ttl_seconds: int = 60
@@ -72,7 +72,7 @@ class KvSettings(BaseModel):
 
 
 class ModuleDatabaseSettings(BaseModel):
-    """Configurações do banco de dados do módulo generico"""
+    """Generic module database settings"""
 
     url: str = "sqlite:///:memory:"
     pool_size: int = 10
@@ -81,9 +81,9 @@ class ModuleDatabaseSettings(BaseModel):
 
 
 class ModuleSettings(BaseModel):
-    """Configurações de um módulo individual"""
+    """Settings for an individual module"""
 
-    __name__: str | None = None  # Nome do módulo (ex.: "echo", "person")
+    __name__: str | None = None  # Module name (e.g. "echo", "person")
     enabled: bool = True
     url: str | None = None
     headers: dict[str, str] | None = None
@@ -93,7 +93,7 @@ class ModuleSettings(BaseModel):
 
 
 class PersonDatabaseSettings(BaseModel):
-    """Configurações do banco de dados do módulo person"""
+    """Database settings for the `person` module"""
 
     url: str = "postgresql+psycopg2://dskity:dskity@127.0.0.1:5432/dskity_person"
     pool_size: int = 10
@@ -102,13 +102,13 @@ class PersonDatabaseSettings(BaseModel):
 
 
 class PersonModuleSettings(ModuleSettings):
-    """Configurações específicas do módulo person"""
+    """Person module specific settings"""
 
     database: PersonDatabaseSettings = Field(default_factory=PersonDatabaseSettings)
 
 
 class ModulesSettings(BaseModel):
-    """Configurações dos módulos (modules.*)"""
+    """Modules settings (modules.*)"""
 
     model_config = {"extra": "allow"}
 
@@ -139,7 +139,7 @@ class ModulesSettings(BaseModel):
         return module
 
     def __getattr__(self, name: str):
-        # Permite acessar módulos extras como atributos e converte dicts em ModuleSettings
+        # Allow accessing extra modules as attributes and convert dicts to ModuleSettings
         extra = getattr(self, "__pydantic_extra__", {}) or {}
         if name in extra:
             val = self._as_module(name, extra[name])
@@ -158,32 +158,32 @@ class ModulesSettings(BaseModel):
 
 
 class DSkitySettings(BaseSettings):
-    """Configuração completa do Dskity.
+    """Full DSkity configuration.
 
-    Carrega de:
-    1. Variáveis de ambiente com prefixo DSKITY_
+    Loaded from, in order of precedence:
+    1. Environment variables with prefix DSKITY_
     2. YAML (via load_config_from_yaml)
 
-    Hierarquia (do maior para menor prioridade):
-    1. Variáveis de ambiente (DSKITY_*)
+    Priority (highest to lowest):
+    1. Environment variables (DSKITY_*)
     2. YAML override (--config)
-    3. YAML base (config/base.yaml)
-    4. Valores padrão definidos nesta classe
+    3. Base YAML (config/base.yaml)
+    4. Defaults defined in this class
 
-    Exemplos de variáveis de ambiente:
+    Examples of environment variables:
     - DSKITY_COMMON__INTERNAL_BASE_URL="http://api.example.com"
     - DSKITY_KV__STORE="redis"
     - DSKITY_MODULES__PERSON__DATABASE__URL="postgresql://..."
     - DSKITY_MODULES_SEARCH_PATHS='["dskity.modules", "./services"]'
 
-    Nota: Use __ (dois underscores) para separar níveis de hierarquia em YAML.
+    Note: Use __ (two underscores) to separate hierarchy levels in YAML/env vars.
     """
 
     model_config = SettingsConfigDict(
         env_prefix="DSKITY_",
-        env_nested_delimiter="__",  # Permite DSKITY_MODULE__SETTING=value
+        env_nested_delimiter="__",  # Allows DSKITY_MODULE__SETTING=value
         case_sensitive=False,
-        extra="allow",  # Permite campos extras do YAML/env vars
+        extra="allow",  # Allow extra fields from YAML/env vars
     )
 
     common: CommonSettings = Field(default_factory=CommonSettings)
@@ -224,33 +224,33 @@ class DSkitySettings(BaseSettings):
 def load_config_from_yaml(
     yaml_data: dict[str, Any], settings_with_env: DSkitySettings | None = None
 ) -> DSkitySettings:
-    """Carrega configuração a partir de dict YAML com precedência de env vars.
+    """Load configuration from a YAML dict with precedence of env vars.
 
-    Ordem de precedência (maior para menor):
-    1. Variáveis de ambiente (DSKITY_*)
-    2. Dados do YAML
-    3. Valores padrão
+    Precedence (highest to lowest):
+    1. Environment variables (DSKITY_*)
+    2. YAML data
+    3. Default values
 
     Args:
-        yaml_data: Dicionário carregado do YAML (base + merged override)
-        settings_with_env: Não usar (mantido para compatibilidade)
+        yaml_data: Dictionary loaded from YAML (base + merged override)
+        settings_with_env: Do not use (kept for compatibility)
 
     Returns:
-        DSkitySettings com todas as configurações validadas
+        DSkitySettings with all values validated
     """
 
-    # Se não há YAML, apenas passa os valores do environ
+    # If there's no YAML, just use values from the environment
     if not yaml_data:
         return DSkitySettings()
 
-    # Se há YAML, precisa fazer merge inteligente
-    # Estratégia: ler env vars manualmente e aplicar precedência
+    # If YAML is present, perform an intelligent merge
+    # Strategy: read env vars manually and apply precedence
 
-    # Começa com YAML
+    # Start with YAML
     result_dict = dict(yaml_data)
 
-    # Agora aplica env vars (DSKITY_*) sobre yaml_dict
-    # Parse env vars com a regra: DSKITY_KEY1__KEY2__KEY3 = common.registry.enabled
+    # Now apply env vars (DSKITY_*) over the yaml dict
+    # Parse env vars using the rule: DSKITY_KEY1__KEY2__KEY3 = common.registry.enabled
     _apply_env_vars_to_dict(result_dict)
 
     # Reconstrói instância
@@ -258,12 +258,12 @@ def load_config_from_yaml(
 
 
 def _apply_env_vars_to_dict(target_dict: dict[str, Any]) -> None:
-    """Aplica env vars (DSKITY_*) ao dict de configuração (in-place).
+    """Apply env vars (DSKITY_*) to the configuration dict (in-place).
 
-    Formato: DSKITY_SECTION__SUBSECTION__KEY = value
+    Format: DSKITY_SECTION__SUBSECTION__KEY = value
     Example: DSKITY_COMMON__INTERNAL_BASE_URL = "http://api.com"
 
-    Case-insensitive para a chave (DSKITY_ funciona em qualquer case).
+    Case-insensitive for the key (DSKITY_ works in any case).
     """
     import os
 
@@ -276,7 +276,7 @@ def _apply_env_vars_to_dict(target_dict: dict[str, Any]) -> None:
         if not env_key_lower.startswith(prefix_lower):
             continue
 
-        # Remove prefixo e converte para path no dict
+        # Remove prefix and convert to a path in the dict
         # E.g., "DSKITY_COMMON__INTERNAL_BASE_URL" → ["common", "internal_base_url"]
         key_path = env_key_lower[len(prefix_lower) :].split("__")
 
@@ -284,13 +284,13 @@ def _apply_env_vars_to_dict(target_dict: dict[str, Any]) -> None:
             target_dict[key_path[0]] = env_value
             continue
 
-        # Navega/cria estrutura no dict
+        # Traverse/create structure in the dict
         current = target_dict
         for i, segment in enumerate(key_path[:-1]):
             if segment not in current:
                 current[segment] = {}
             elif not isinstance(current[segment], dict):
-                # Já tem um valor escalar, não pode descer
+                # Already has a scalar value, cannot descend
                 break
             current = current[segment]
 
@@ -302,10 +302,10 @@ def _apply_env_vars_to_dict(target_dict: dict[str, Any]) -> None:
 def _smart_merge(
     current_dict: dict[str, Any], yaml_dict: dict[str, Any], default_dict: dict[str, Any]
 ) -> dict[str, Any]:
-    """Merge inteligente: YAML sobrescreve defaults, mas não env vars.
+    """Smart merge: YAML overrides defaults, but not env vars.
 
-    A heurística é: se current == default, então não é env var, pode usar YAML.
-    Se current != default, então é env var, mantém.
+    Heuristic: if current == default, then it's not an env var and YAML may be used.
+    If current != default, then it's an env var and should be kept.
     """
     result = dict(current_dict)
 
@@ -315,8 +315,8 @@ def _smart_merge(
         elif isinstance(yaml_val, dict) and isinstance(result.get(key), dict):
             result[key] = _smart_merge(result[key], yaml_val, default_dict.get(key, {}))
         elif result[key] == default_dict.get(key):
-            # É padrão, pode sobrescrever com YAML
+            # It's the default, can be overridden by YAML
             result[key] = yaml_val
-        # Senão é env var, mantém
+        # Otherwise it's an env var, keep it
 
     return result

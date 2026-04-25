@@ -25,7 +25,7 @@ def services_html(request: Request) -> HTMLResponse:
     if reg is None:
         return HTMLResponse(
             "<html><body><h1>Service discovery</h1>\
-                                        <p>registry desabilitado (common.registry.enabled=false)</p>\
+                                        <p>registry disabled (common.registry.enabled=false)</p>\
                         </body></html>",
             status_code=200,
         )
@@ -57,14 +57,14 @@ def services_html(request: Request) -> HTMLResponse:
             f"<td style='text-align:right'>{count}</td>"
             f"<td>{html.escape(fmt_ts(last_hb))}</td>"
             f"<td>{html.escape(fmt_age(age))}</td>"
-            f"<td><a href='{link}'>instâncias (json)</a></td>"
+            f"<td><a href='{link}'>instances (json)</a></td>"
             "</tr>"
         )
 
-    body = "".join(trs) if trs else "<tr><td colspan='5'>Nenhum serviço registrado ainda</td></tr>"
+    body = "".join(trs) if trs else "<tr><td colspan='5'>No services registered yet</td></tr>"
 
     page = f"""<!doctype html>
-<html lang='pt-br'>
+<html lang='en'>
     <head>
         <meta charset='utf-8' />
         <meta name='viewport' content='width=device-width, initial-scale=1' />
@@ -73,16 +73,16 @@ def services_html(request: Request) -> HTMLResponse:
     <body style='font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial; margin: 24px;'>
         <h1 style='margin: 0 0 8px 0;'>Service discovery</h1>
         <div style='margin: 0 0 16px 0; color: #444;'>
-            Atualizado em: {html.escape(now.isoformat())} (UTC)
+            Updated at: {html.escape(now.isoformat())} (UTC)
         </div>
         <table border='1' cellpadding='8' cellspacing='0' style='border-collapse: collapse; min-width: 720px;'>
             <thead style='background: #f5f5f5;'>
                 <tr>
-                    <th align='left'>Serviço</th>
-                    <th align='right'>Instâncias</th>
-                    <th align='left'>Último heartbeat (UTC)</th>
-                    <th align='left'>Idade</th>
-                    <th align='left'>Detalhe</th>
+                    <th align='left'>Service</th>
+                    <th align='right'>Instances</th>
+                    <th align='left'>Last heartbeat (UTC)</th>
+                    <th align='left'>Age</th>
+                    <th align='left'>Detail</th>
                 </tr>
             </thead>
             <tbody>
@@ -116,17 +116,17 @@ def list_instances_json(service: str, request: Request) -> dict:
 
 @router.get("/config", response_class=HTMLResponse)
 def config_html(request: Request) -> HTMLResponse:
-    """Exibe configuração atual da aplicação (incluindo credenciais)."""
-    # Tenta pegar config do app.state, senão carrega novamente
+    """Display current application configuration (including credentials)."""
+    # Try to get config from app.state, otherwise reload
     config = getattr(request.app.state, "config", None)
     if config is None:
         config = load_config()
 
-    # Converte para dict recursivamente
+    # Convert to a dict recursively
     config_dict = config.model_dump(exclude_none=True)
 
     def render_value(v) -> str:
-        """Renderiza valor com destaque para credenciais."""
+        """Render a value with highlighting for credentials."""
         if v is None:
             return "<em style='color: #999;'>null</em>"
         if isinstance(v, bool):
@@ -134,14 +134,14 @@ def config_html(request: Request) -> HTMLResponse:
         if isinstance(v, (int, float)):
             return f"<span style='color: #00a;'>{v}</span>"
         if isinstance(v, str):
-            # Destaca possíveis credenciais
+            # Highlight potential credentials
             if any(word in v.lower() for word in ["password", "token", "secret"]) or "://" in v and "@" in v:
                 return f"<span style='color: #d60; background: #ffc;'>{html.escape(v)}</span>"
             return html.escape(v)
         return html.escape(str(v))
 
     def render_dict(d: dict, level: int = 0) -> str:
-        """Renderiza dicionário como HTML aninhado."""
+        """Render a dictionary as nested HTML."""
         if not d:
             return "<div style='color: #999;'>{}</div>"
 
@@ -163,31 +163,31 @@ def config_html(request: Request) -> HTMLResponse:
     body = render_dict(config_dict)
 
     page = f"""<!doctype html>
-<html lang='pt-br'>
+<html lang='en'>
 	<head>
 		<meta charset='utf-8' />
 		<meta name='viewport' content='width=device-width, initial-scale=1' />
-		<title>Configuração da Aplicação</title>
+        <title>Application Configuration</title>
 	</head>
 	<body style='font-family: ui-monospace, Menlo, Monaco, Consolas, monospace; margin: 24px; font-size: 13px;'>
 		<h1 style='font-family: ui-sans-serif, system-ui, -apple-system; margin: 0 0 8px 0;'>
-                        Configuração da Aplicação
+                        Application Configuration
                 </h1>
-		<div style='margin: 0 0 16px 0; color: #666; font-family: ui-sans-serif, system-ui;'>
-			Carregado em: {html.escape(now.isoformat())} (UTC)
+        <div style='margin: 0 0 16px 0; color: #666; font-family: ui-sans-serif, system-ui;'>
+            Loaded at: {html.escape(now.isoformat())} (UTC)
 		</div>
 		<div style='padding: 16px; background: #f8f8f8; border: 1px solid #ddd; border-radius: 4px; line-height: 1.6;'>
 			{body}
 		</div>
-		<div style='margin-top: 16px; color: #666; font-family: ui-sans-serif, system-ui;'>
-			API JSON: <a href='/_core/config.json'>/_core/config.json</a> | 
-			<a href='/_core/services'>← Voltar para Services</a>
+        <div style='margin-top: 16px; color: #666; font-family: ui-sans-serif, system-ui;'>
+            API JSON: <a href='/_core/config.json'>/_core/config.json</a> | 
+            <a href='/_core/services'>← Back to Services</a>
 		</div>
-		<div style='margin-top: 8px; padding: 12px; 
-                        background: #fff3cd; border: 1px solid #ffc107; 
-                        border-radius: 4px; color: #856404; font-family: ui-sans-serif, system-ui;'>
-			⚠️ <strong>Aviso:</strong> Esta página exibe credenciais e informações sensíveis. Não exponha em produção.
-		</div>
+        <div style='margin-top: 8px; padding: 12px; 
+                            background: #fff3cd; border: 1px solid #ffc107; 
+                            border-radius: 4px; color: #856404; font-family: ui-sans-serif, system-ui;'>
+            ⚠️ <strong>Warning:</strong> This page displays credentials and sensitive information. Do not expose in production.
+        </div>
 	</body>
 </html>"""
 
@@ -196,7 +196,7 @@ def config_html(request: Request) -> HTMLResponse:
 
 @router.get("/config.json")
 def config_json(request: Request) -> dict:
-    """Retorna configuração atual em formato JSON."""
+    """Return current configuration as JSON."""
     config = getattr(request.app.state, "config", None)
     if config is None:
         config = load_config()

@@ -29,7 +29,7 @@ class GRPCClient:
         except Exception as exc:  # pragma: no cover - runtime error if grpc missing
             raise RuntimeError("grpc package is required to create a channel") from exc
 
-        # Cria um channel inseguro por padrão; módulos podem trocar/fechar.
+        # Create an insecure channel by default; modules may replace/close it.
         self._channel = grpc.insecure_channel(self.target)
         return self._channel
 

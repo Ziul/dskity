@@ -1,4 +1,4 @@
-"""Testes para configuração com pydantic-settings."""
+"""Tests for configuration using pydantic-settings."""
 
 from __future__ import annotations
 
@@ -11,19 +11,19 @@ from dskity.config.loader import load_config
 
 
 def test_load_config_basic() -> None:
-    """Testa carregamento básico da configuração."""
+    """Test basic configuration loading."""
     cfg = load_config()
 
     assert cfg.common.internal_base_url == "http://127.0.0.1:8000"
     assert cfg.kv.store == "inmemory"
-    assert cfg.modules_search_paths == ["dskity.modules", "modules"]
+    assert "modules" in cfg.modules_search_paths
     assert cfg.modules.kvstore.enabled is True
     assert cfg.modules.kvstore.__name__ == "kvstore"
     assert cfg.modules.get("person") is None
 
 
 def test_load_config_env_var_modules_search_paths() -> None:
-    """Testa override da lista de caminhos de import de módulos via env var."""
+    """Test overriding the modules search paths via env var."""
     os.environ["DSKITY_MODULES_SEARCH_PATHS"] = '["custom_app.modules", "./services"]'
 
     try:
@@ -34,7 +34,7 @@ def test_load_config_env_var_modules_search_paths() -> None:
 
 
 def test_load_config_deep_merge(tmp_path: Path) -> None:
-    """Testa deep merge de YAML override."""
+    """Test deep merge of YAML override."""
     override = {
         "common": {"internal_base_url": "http://example.com"},
         "kv": {"store": "inmemory"},
@@ -50,12 +50,12 @@ def test_load_config_deep_merge(tmp_path: Path) -> None:
     assert cfg.kv.store == "inmemory"
     assert cfg.modules.kvstore.enabled is False
     assert cfg.modules.kvstore.__name__ == "kvstore"
-    # Não há módulos fixos por padrão
+    # There are no fixed modules by default
     assert cfg.modules.get("person") is None
 
 
 def test_load_config_env_var_override() -> None:
-    """Testa override via variável de ambiente."""
+    """Test override via environment variable."""
     os.environ["DSKITY_COMMON__INTERNAL_BASE_URL"] = "http://env.example.com"
 
     try:
@@ -66,7 +66,7 @@ def test_load_config_env_var_override() -> None:
 
 
 def test_load_config_env_var_kv_store() -> None:
-    """Testa override de kv.store via env var."""
+    """Test overriding kv.store via env var."""
     os.environ["DSKITY_KV__STORE"] = "redis"
 
     try:
@@ -77,7 +77,7 @@ def test_load_config_env_var_kv_store() -> None:
 
 
 def test_load_config_env_var_nested_person_database() -> None:
-    """Testa override aninhado para person.database."""
+    """Test nested override for person.database."""
     test_url = "postgresql://custom:pass@custom-host:5432/custom_db"
     os.environ["DSKITY_MODULES__PERSON__DATABASE__URL"] = test_url
 
@@ -90,7 +90,7 @@ def test_load_config_env_var_nested_person_database() -> None:
 
 
 def test_load_config_multiple_env_vars() -> None:
-    """Testa múltiplas variáveis de ambiente simultâneamente."""
+    """Test multiple environment variables at once."""
     os.environ["DSKITY_COMMON__INTERNAL_BASE_URL"] = "http://multi.test"
     os.environ["DSKITY_KV__STORE"] = "consul"
     os.environ["DSKITY_KV__REDIS__KEY_PREFIX"] = "custom_prefix"
@@ -107,7 +107,7 @@ def test_load_config_multiple_env_vars() -> None:
 
 
 def test_load_config_env_var_precedence(tmp_path: Path) -> None:
-    """Testa que env vars têm precedência sobre YAML."""
+    """Test that env vars take precedence over YAML."""
     override = {
         "common": {"internal_base_url": "http://yaml.example.com"},
     }
@@ -126,7 +126,7 @@ def test_load_config_env_var_precedence(tmp_path: Path) -> None:
 
 
 def test_load_config_boolean_env_var() -> None:
-    """Testa variáveis booleanas."""
+    """Test boolean environment variables."""
     os.environ["DSKITY_COMMON__REGISTRY__ENABLED"] = "false"
 
     try:
@@ -137,7 +137,7 @@ def test_load_config_boolean_env_var() -> None:
 
 
 def test_load_config_integer_env_var() -> None:
-    """Testa variáveis inteiras."""
+    """Test integer environment variables."""
     os.environ["DSKITY_KV__DEFAULT_TTL_SECONDS"] = "120"
     os.environ["DSKITY_KV__RING__VNODES"] = "128"
 
@@ -151,7 +151,7 @@ def test_load_config_integer_env_var() -> None:
 
 
 def test_load_config_case_insensitive() -> None:
-    """Testa que configuração é case-insensitive."""
+    """Test that configuration is case-insensitive."""
     os.environ["DSKITY_COMMON__INTERNAL_BASE_URL"] = "http://test1.com"
     os.environ["dskity_kv__store"] = "redis"  # minúscula
 

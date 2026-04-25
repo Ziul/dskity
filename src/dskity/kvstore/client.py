@@ -15,7 +15,7 @@ class KvStoreClient:
     def _node_for_key(self, key: str) -> RingNode:
         owner = self.ring.owner_for_key(key)
         if owner is None:
-            raise RuntimeError("Ring vazio: publique instâncias via service discovery ou configure kv.ring.nodes")
+            raise RuntimeError("Empty ring: publish instances via service discovery or configure kv.ring.nodes")
         return owner
 
     def get(self, key: str) -> Any:

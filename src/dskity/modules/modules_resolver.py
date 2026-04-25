@@ -53,10 +53,10 @@ def _static_urls_from_config(cfg: Any, service: str) -> list[str]:
     if isinstance(modules_cfg, dict):
         urls.extend(_urls_from_module_cfg(modules_cfg.get(service)))
 
-    # Compat: alguns overrides antigos podem ter config no topo (ex.: echo.url)
+    # Compat: some old overrides may have config at the top level (e.g. echo.url)
     urls.extend(_urls_from_module_cfg(cfg.get(service)))
 
-    # remove duplicados mantendo ordem
+    # remove duplicates while preserving order
     seen: set[str] = set()
     ordered: list[str] = []
     for u in urls:
@@ -93,14 +93,14 @@ class ModulesResolver:
             if urls:
                 return urls
 
-        # Fallback (config): permite definir URLs fixas por módulo quando o discovery não é compartilhado.
-        # Ex.: com kv.store=inmemory em processos distintos.
+        # Fallback (config): allow defining fixed URLs per module when discovery is not shared.
+        # E.g.: with kv.store=inmemory in separate processes.
         cfg: dict[str, Any] = getattr(self.app.state, "config", {}) or {}
         static_urls = _static_urls_from_config(cfg, service)
         if static_urls:
             return static_urls
 
-        # Fallback: usa common.internal_base_url e o base_path conhecido do módulo.
+        # Fallback: use common.internal_base_url and the module's known base_path.
         common = cfg.get("common", {}) if isinstance(cfg, dict) else {}
         internal_base_url = None
         if isinstance(common, dict):

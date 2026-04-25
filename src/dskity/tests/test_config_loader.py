@@ -19,10 +19,10 @@ def test_load_config_deep_merge(tmp_path: Path) -> None:
 
     cfg = load_config(override_path=str(override_path))
 
-    # cfg agora é DSkitySettings (Pydantic model), não um dict
+    # cfg is now a DSkitySettings (Pydantic model), not a dict
     assert cfg.common.internal_base_url == "http://example.com"
     assert cfg.kv.store == "inmemory"
-    # modules.kvstore não existe em novo modelo (era para compatibilidade)
+    # modules.kvstore does not exist in the new model (kept for compatibility)
 
 
 def test_load_config_reads_toml_override(tmp_path: Path) -> None:

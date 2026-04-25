@@ -11,13 +11,13 @@ from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_
 
 _HTTP_REQUESTS_TOTAL = Counter(
     "http_requests_total",
-    "Total de requisições HTTP",
+    "Total HTTP requests",
     labelnames=("method", "route", "status"),
 )
 
 _HTTP_REQUEST_DURATION_SECONDS = Histogram(
     "http_request_duration_seconds",
-    "Duração das requisições HTTP (segundos)",
+    "HTTP request duration (seconds)",
     labelnames=("method", "route", "status"),
 )
 

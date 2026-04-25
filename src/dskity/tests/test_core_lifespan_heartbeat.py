@@ -20,7 +20,7 @@ def test_lifespan_starts_and_stops_heartbeat(monkeypatch) -> None:
     monkeypatch.setattr(bootstrap_mod, "start_heartbeat", fake_start_heartbeat)
     monkeypatch.setattr(bootstrap_mod, "stop_heartbeat", fake_stop_heartbeat)
 
-    # Garante que advertise_url exista para o start_heartbeat não retornar cedo.
+    # Ensure advertise_url exists so start_heartbeat does not return early.
     monkeypatch.setenv("DSKITY_ADVERTISE_URL", "http://127.0.0.1:8000")
 
     app = create_app()
@@ -32,5 +32,5 @@ def test_lifespan_starts_and_stops_heartbeat(monkeypatch) -> None:
     assert any(c.startswith("start:") for c in calls)
     assert "stop" in calls
 
-    # limpeza do env para não vazar em outros testes (monkeypatch já faz isso, mas mantém explícito)
+    # Clean env variables so they don't leak into other tests (monkeypatch already handles this, but keep explicit)
     os.environ.pop("DSKITY_ADVERTISE_URL", None)

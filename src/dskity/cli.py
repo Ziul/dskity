@@ -40,7 +40,7 @@ def main(argv: list[str] | None = None) -> int:
         "-c",
         dest="config_path",
         default=None,
-        help="Caminho para um arquivo de config TOML ou YAML que sobrescreve o padrão",
+        help="Path to a TOML or YAML config file that overrides the defaults",
     )
     parser.add_argument("--host", "-H", default=None)
     parser.add_argument("--port", "-p", type=int, default=None)
@@ -48,7 +48,7 @@ def main(argv: list[str] | None = None) -> int:
         "--advertise-url",
         dest="advertise_url",
         default=None,
-        help="URL anunciada no service discovery (se diferente do listen host/port)",
+        help="URL advertised in service discovery (if different from listen host/port)",
     )
     parser.add_argument(
         "--target",
@@ -57,8 +57,8 @@ def main(argv: list[str] | None = None) -> int:
         action="append",
         default=None,
         help=(
-            "Lista de módulos para habilitar (override do YAML). "
-            "Aceita CSV (ex.: echo,health) e pode ser repetido (ex.: -t echo -t health)."
+            "List of modules to enable (overrides YAML). "
+            "Accepts CSV (e.g. echo,health) and can be repeated (e.g. -t echo -t health)."
         ),
     )
     args = parser.parse_args(argv)
