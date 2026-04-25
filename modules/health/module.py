@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 from fastapi import APIRouter, FastAPI
 
 from dskity.modules.contracts import Module, ModuleMeta
+from dskity import DSkitySettings
 
 if TYPE_CHECKING:  # pragma: no cover
     import grpc  # type: ignore
@@ -15,7 +16,7 @@ if TYPE_CHECKING:  # pragma: no cover
 class HealthModule(Module):
     meta: ModuleMeta = ModuleMeta(name="health", base_path="/health")
 
-    def register(self, app: FastAPI, config: dict, grpc_server: "grpc.aio.Server | None" = None) -> None:
+    def register(self, app: FastAPI, config: DSkitySettings, grpc_server: "grpc.aio.Server | None" = None) -> None:
         router = APIRouter(prefix=self.meta.base_path, tags=[self.meta.name])
 
         @router.get("/live")

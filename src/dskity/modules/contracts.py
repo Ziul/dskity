@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Protocol
 
 from fastapi import FastAPI
+from dskity import DSkitySettings
 
 if TYPE_CHECKING:  # pragma: no cover
     import grpc  # type: ignore
@@ -21,6 +22,6 @@ class Module(Protocol):
     def register(
         self,
         app: FastAPI,
-        config: dict,
+        config: DSkitySettings|dict,
         grpc_server: "grpc.aio.Server | None" = None,
     ) -> None: ...

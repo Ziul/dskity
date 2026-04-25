@@ -24,6 +24,7 @@ dskity = "dskity.__main__:main"
 [dependency-groups]
 dev = [
     "pytest>=9.0.3",
+    "ruff>=0.15.12",
 ]
 
 [tool.setuptools]
