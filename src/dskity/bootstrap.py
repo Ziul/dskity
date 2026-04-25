@@ -13,6 +13,9 @@ from dskity.config.loader import load_config
 from dskity.kvstore.backends import backend_from_config, generate_node_id
 from dskity.metrics import install_metrics
 from dskity.modules.registry import ModuleRegistry
+from dskity.modules.contracts import TransportClients
+from dskity.transport.mqtt import MQTTClient
+from dskity.transport.grpc import GRPCClient
 from dskity.modules.modules_resolver import ModulesResolver
 from dskity.request_id import install_request_id
 from dskity.registry.api import router as registry_router
@@ -234,10 +237,13 @@ def bootstrap(app: FastAPI) -> None:
         EnabledModuleInfo(name=m.meta.name, base_path=m.meta.base_path) for m in enabled_modules
     ]
 
+    # Cria objeto que agrupa os clientes de transporte disponíveis para os módulos.
+    mqtt_client = MQTTClient()  # singleton leve — não conecta automaticamente
+    grpc_client = GRPCClient()
+    clients = TransportClients(http=app, grpc=grpc_client, mqtt=mqtt_client)
+
     for module in enabled_modules:
-        # Preparação para gRPC: quando habilitarmos gRPC no core, passaremos um
-        # grpc.aio.Server real aqui. Por enquanto, mantém None.
-        module.register(app=app, config=config, grpc_server=None)
+        module.register(clients=clients, config=config)
 
     # Se houver um store compartilhável (kvstore habilitado), expõe endpoints de discovery
     # e auto-registra os módulos usando base_url inferido a partir das requests.

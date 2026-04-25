@@ -91,7 +91,7 @@ def test_bootstrap_logs_loaded_modules(caplog, monkeypatch) -> None:
         def __init__(self, name: str, base_path: str) -> None:
             self.meta = type("Meta", (), {"name": name, "base_path": base_path})()
 
-        def register(self, app, config, grpc_server=None):  # noqa: ANN001
+        def register(self, clients, config):  # noqa: ANN001
             return None
 
     fake_registry = ModuleRegistry(

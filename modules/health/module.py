@@ -1,22 +1,16 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
 
-from fastapi import APIRouter, FastAPI
+from fastapi import APIRouter
 
-from dskity.modules.contracts import Module, ModuleMeta
-from dskity import DSkitySettings
-
-if TYPE_CHECKING:  # pragma: no cover
-    import grpc  # type: ignore
-
+from dskity import Module, ModuleMeta, DSkitySettings, TransportClients
 
 @dataclass(frozen=True)
 class HealthModule(Module):
     meta: ModuleMeta = ModuleMeta(name="health", base_path="/health")
 
-    def register(self, app: FastAPI, config: DSkitySettings, grpc_server: "grpc.aio.Server | None" = None) -> None:
+    def register(self, clients: TransportClients, config: DSkitySettings ) -> None:
         router = APIRouter(prefix=self.meta.base_path, tags=[self.meta.name])
 
         @router.get("/live")
@@ -27,7 +21,7 @@ class HealthModule(Module):
         def ready() -> dict:
             return {"status": "ok"}
 
-        app.include_router(router)
+        clients.http.include_router(router)
 
 
 def get_module() -> Module:

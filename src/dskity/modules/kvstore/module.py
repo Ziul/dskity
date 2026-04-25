@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
 
-from fastapi import APIRouter, FastAPI, HTTPException
+from fastapi import APIRouter, HTTPException
 from fastapi.responses import RedirectResponse
 
 from biostation_api.core.kvstore.backends import backend_from_config
@@ -11,15 +10,12 @@ from biostation_api.core.kvstore.ring import ring_from_runtime
 from biostation_api.core.modules.contracts import Module, ModuleMeta
 from biostation_api.core.registry.store import RegistryStore
 
-if TYPE_CHECKING:  # pragma: no cover
-    import grpc  # type: ignore
-
-
 @dataclass(frozen=True)
 class KvStoreModule(Module):
     meta: ModuleMeta = ModuleMeta(name="kvstore", base_path="")
 
-    def register(self, app: FastAPI, config: dict, grpc_server: "grpc.aio.Server | None" = None) -> None:
+    def register(self, clients, config: dict) -> None:
+        app = getattr(clients, "http", None)
         ring, node_id = ring_from_runtime(app, config)
 
         backend = getattr(app.state, "kvstore_backend", None)
