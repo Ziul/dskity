@@ -46,6 +46,60 @@ pip install -e .[dev]
 
 Configuration is handled via the `DSkitySettings` pydantic settings model in `src/dskity/config`. You can provide a YAML or environment variables to configure transports and KV backends.
 
+```yaml
+modules:
+  service1:
+    enabled: true
+    database:
+      url: "sqlite:///:memory:"
+      pool_size: 10
+      max_overflow: 20
+      pool_pre_ping: true
+  service2:
+    enabled: false
+  service3:
+    enabled: true
+    database:
+      url: "postgresql+psycopg2://user:pass@127.0.0.1:5432/service3"
+```
+
+You can also use envioriments variables to set values:
+
+```bash
+DSKITY_MODULES_SERVICE3_DATABASE_URL="postgresql+psycopg2://user:superpass@127.0.0.1:5432/service3"
+```
+
+By default, those are the default settings.
+
+```yaml
+"advertise_url": "http://0.0.0.0:8000"
+"port": "8000"
+"common": 
+    "advertise_url": "http://127.0.0.1:8000"
+    "internal_base_url": "http://127.0.0.1:8000"
+    "registry": 
+        "enabled": true
+        "heartbeat_interval_seconds": 30
+        "ttl_seconds": 60
+"config": "./settings.yaml"
+"host": "0.0.0.0"
+"kv":
+    "consul":
+        "key_prefix": "dskity"
+        "url": "http://127.0.0.1:8500"
+        "verify": true
+    "default_ttl_seconds": 60
+    "redis":
+        "key_prefix": "dskity"
+        "url": "redis://127.0.0.1:6379/0"
+    "ring":
+        "vnodes": 64
+    "store": "inmemory"
+"modules":
+"modules_search_paths":
+    -"modules"
+```
+
 ## Running Locally
 
 Run the FastAPI app (when present) or import `dskity.bootstrap` to construct an application instance.
