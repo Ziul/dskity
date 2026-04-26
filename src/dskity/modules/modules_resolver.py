@@ -38,7 +38,12 @@ def _urls_from_module_cfg(module_cfg: Any) -> list[str]:
     if not isinstance(route, str) or not route.strip():
         route = module_cfg.get("base_path")
 
-    if isinstance(base_url, str) and base_url.strip() and isinstance(route, str) and route.strip():
+    if (
+        isinstance(base_url, str)
+        and base_url.strip()
+        and isinstance(route, str)
+        and route.strip()
+    ):
         return [_join_url(base_url.strip(), route.strip())]
 
     return []
@@ -124,11 +129,13 @@ class ModulesResolver:
     def paths(self, service: str) -> list[str]:
         results = []
         for route in self.app.router.routes:
-            if isinstance(route, (fastapi.routing.APIRoute, fastapi.routing.APIWebSocketRoute)):
+            if isinstance(
+                route, (fastapi.routing.APIRoute, fastapi.routing.APIWebSocketRoute)
+            ):
                 if route.tags and service in route.tags:
                     results.append(route.path)
         return results
-    
+
     def base_path(self, service: str) -> str:
         urls = self.paths(service)
         if not urls:
@@ -162,6 +169,10 @@ class ModulesResolver:
             for inst in instances:
                 headers = inst.get("headers")
                 if isinstance(headers, dict):
-                    return {str(k): str(v) for k, v in headers.items() if isinstance(k, str) and isinstance(v, str)}
+                    return {
+                        str(k): str(v)
+                        for k, v in headers.items()
+                        if isinstance(k, str) and isinstance(v, str)
+                    }
 
         return {}

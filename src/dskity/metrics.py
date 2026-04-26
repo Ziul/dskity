@@ -51,7 +51,9 @@ def install_metrics(app: FastAPI) -> None:
         method = request.method
 
         _HTTP_REQUESTS_TOTAL.labels(method=method, route=route, status=status).inc()
-        _HTTP_REQUEST_DURATION_SECONDS.labels(method=method, route=route, status=status).observe(elapsed)
+        _HTTP_REQUEST_DURATION_SECONDS.labels(
+            method=method, route=route, status=status
+        ).observe(elapsed)
         return response
 
     app.include_router(router)

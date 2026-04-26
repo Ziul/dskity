@@ -34,14 +34,19 @@ def test_ring_from_runtime_uses_registry_instances() -> None:
 
     from dskity.config.settings import DSkitySettings
 
-    app = SimpleNamespace(state=SimpleNamespace(registry_store=store, instance_id="node-a"))
+    app = SimpleNamespace(
+        state=SimpleNamespace(registry_store=store, instance_id="node-a")
+    )
     cfg = DSkitySettings.model_validate({"kv": {"ring": {"vnodes": 8}}})
 
     ring, node_id = ring_from_runtime(app, cfg)
 
     assert node_id == "node-a"
     assert sorted(n.id for n in ring.nodes) == ["node-a", "node-b"]
-    assert {n.base_url for n in ring.nodes} == {"http://127.0.0.1:9001", "http://127.0.0.1:9002"}
+    assert {n.base_url for n in ring.nodes} == {
+        "http://127.0.0.1:9001",
+        "http://127.0.0.1:9002",
+    }
 
     owner = ring.owner_for_key("some-key")
     assert owner is not None

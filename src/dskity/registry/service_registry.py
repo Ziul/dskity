@@ -49,9 +49,9 @@ class ServiceRegistry:
             ttl_seconds=int(ttl_seconds),
         )
         logger.debug(
-            f"Registered service instance: service={service}, instance_id={instance_id}, url={
-                _join_url(base_url, route)
-            }, ttl_seconds={ttl_seconds}"
+            f"Registered service instance: service={service}, instance_id={
+                instance_id
+            }, url={_join_url(base_url, route)}, ttl_seconds={ttl_seconds}"
         )
 
     def list_services(self) -> list[str]:
@@ -140,7 +140,7 @@ class ServiceRegistry:
                 entry["last_heartbeat_age_seconds"] = max(0, now_ts - int(hb))
 
         result = list(agg.values())
-        result.sort(key=lambda x: (x.get("service") or ""))
+        result.sort(key=lambda x: x.get("service") or "")
         return result
 
 

@@ -14,7 +14,8 @@ def get_local_ip() -> str:
     except Exception as e:
         logging.error(f"Error occurred while fetching local IP: {e}")
         return os.getenv("DSKITY_HOST", "0.0.0.0")
-    
+
+
 def get_current_host_port() -> tuple[str, int]:
     """Get the current host and port from environment variables or defaults."""
     return get_local_ip(), int(os.getenv("DSKITY_PORT", "8000"))

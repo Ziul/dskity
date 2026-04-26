@@ -44,7 +44,13 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--host", "-H", default="0.0.0.0")
     parser.add_argument("--port", "-p", type=int, default=8000)
-    parser.add_argument("--log-level", "-l", default='INFO', dest="log_level", help="Set log level of the application")
+    parser.add_argument(
+        "--log-level",
+        "-l",
+        default="INFO",
+        dest="log_level",
+        help="Set log level of the application",
+    )
     parser.add_argument(
         "--advertise-url",
         dest="advertise_url",
@@ -84,7 +90,6 @@ def main(argv: list[str] | None = None) -> int:
     else:
         advertise_url = f"http://{host}:{port}"
     os.environ["DSKITY_ADVERTISE_URL"] = advertise_url
-    
 
     os.environ["DSKITY_PORT"] = str(port)
     os.environ["DSKITY_HOST"] = host

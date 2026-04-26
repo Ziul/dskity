@@ -25,7 +25,9 @@ def test_modules_resolver_fallback_uses_internal_base_url_and_base_path() -> Non
     assert resolver.get("health") == "http://127.0.0.1:8000/health"
 
 
-def test_modules_resolver_fallback_uses_configured_module_url_when_registry_is_empty() -> None:
+def test_modules_resolver_fallback_uses_configured_module_url_when_registry_is_empty() -> (
+    None
+):
     app = FastAPI()
     app.state.config = {
         "modules": {

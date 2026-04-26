@@ -33,7 +33,9 @@ class RegistryAdvertiseMiddleware(BaseHTTPMiddleware):
         ip = s.getsockname()[0]
         port = request.url.port or 80
         base_url = f"http://{ip}:{port}".rstrip("/")
-        logging.info(f"Determined base_url as {base_url} for service registry advertisement.")
+        logging.info(
+            f"Determined base_url as {base_url} for service registry advertisement."
+        )
 
         registry = ServiceRegistry(store=store)
 

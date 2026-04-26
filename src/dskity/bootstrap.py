@@ -156,13 +156,18 @@ def bootstrap(app: FastAPI) -> None:
         # port = app.state.listen_port if hasattr(app.state, "listen_port") else 8000
         # advertise_url = f"http://{ip}:{port}".rstrip("/")
         advertise_url = None
-    app.state.advertise_url = advertise_url.rstrip("/") if isinstance(advertise_url, str) and advertise_url else None
+    app.state.advertise_url = (
+        advertise_url.rstrip("/")
+        if isinstance(advertise_url, str) and advertise_url
+        else None
+    )
 
     # Acessa registry config via atributos do Pydantic model
     if config and config.common.registry:
         app.state.registry_ttl_seconds = config.common.registry.ttl_seconds or 60
-        app.state.registry_heartbeat_interval_seconds = config.common.registry.heartbeat_interval_seconds or max(
-            10, app.state.registry_ttl_seconds // 2
+        app.state.registry_heartbeat_interval_seconds = (
+            config.common.registry.heartbeat_interval_seconds
+            or max(10, app.state.registry_ttl_seconds // 2)
         )
     else:
         app.state.registry_ttl_seconds = 60
@@ -183,7 +188,9 @@ def bootstrap(app: FastAPI) -> None:
     registry_cfg = config.common.registry if config and config.common else None
     legacy_registry_enabled = False  # Já não há módulo 'kvstore' em novo código
 
-    registry_enabled = bool(registry_cfg.enabled) if registry_cfg else legacy_registry_enabled
+    registry_enabled = (
+        bool(registry_cfg.enabled) if registry_cfg else legacy_registry_enabled
+    )
     if registry_enabled:
         try:
             store_name, backend = backend_from_config(config)
@@ -234,7 +241,8 @@ def bootstrap(app: FastAPI) -> None:
         )
 
     app.state.enabled_modules = [
-        EnabledModuleInfo(name=m.meta.name, base_path=m.meta.base_path) for m in enabled_modules
+        EnabledModuleInfo(name=m.meta.name, base_path=m.meta.base_path)
+        for m in enabled_modules
     ]
 
     # Create an object grouping transport clients available to modules.

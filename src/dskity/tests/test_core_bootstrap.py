@@ -31,7 +31,9 @@ def test_bootstrap_exposes_root_metrics_and_request_id() -> None:
     assert "X-Request-Id" in r_metrics.headers
 
 
-def test_resolve_modules_search_paths_includes_cwd_app_dir_and_extras(tmp_path: Path, monkeypatch) -> None:
+def test_resolve_modules_search_paths_includes_cwd_app_dir_and_extras(
+    tmp_path: Path, monkeypatch
+) -> None:
     run_dir = tmp_path / "run"
     app_dir = tmp_path / "app"
     run_dir.mkdir()
@@ -39,7 +41,9 @@ def test_resolve_modules_search_paths_includes_cwd_app_dir_and_extras(tmp_path: 
 
     monkeypatch.chdir(run_dir)
 
-    cfg = DSkitySettings.model_validate({"modules_search_paths": ["dskity.modules", "./services", "./plugins"]})
+    cfg = DSkitySettings.model_validate(
+        {"modules_search_paths": ["dskity.modules", "./services", "./plugins"]}
+    )
     config_path = str(app_dir / "settings.yaml")
 
     paths = _resolve_modules_search_paths(cfg, config_path)
@@ -53,7 +57,14 @@ def test_resolve_modules_search_paths_includes_cwd_app_dir_and_extras(tmp_path: 
 
 def test_resolve_modules_import_packages_extracts_only_package_entries() -> None:
     cfg = DSkitySettings.model_validate(
-        {"modules_search_paths": ["dskity.modules", "custom_app.modules", "./services", "/tmp/plugins"]}
+        {
+            "modules_search_paths": [
+                "dskity.modules",
+                "custom_app.modules",
+                "./services",
+                "/tmp/plugins",
+            ]
+        }
     )
 
     packages = _resolve_modules_import_packages(cfg)
@@ -61,7 +72,9 @@ def test_resolve_modules_import_packages_extracts_only_package_entries() -> None
     assert packages == ["dskity.modules", "custom_app.modules"]
 
 
-def test_install_modules_search_paths_adds_paths_to_syspath(tmp_path: Path, monkeypatch) -> None:
+def test_install_modules_search_paths_adds_paths_to_syspath(
+    tmp_path: Path, monkeypatch
+) -> None:
     p1 = str((tmp_path / "p1").resolve())
     p2 = str((tmp_path / "p2").resolve())
 
@@ -76,7 +89,11 @@ def test_install_modules_search_paths_adds_paths_to_syspath(tmp_path: Path, monk
 
 
 def test_bootstrap_does_not_fail_when_no_modules_are_discovered(monkeypatch) -> None:
-    monkeypatch.setattr(bootstrap_mod.ModuleRegistry, "from_package", lambda _pkg: ModuleRegistry(modules=()))
+    monkeypatch.setattr(
+        bootstrap_mod.ModuleRegistry,
+        "from_package",
+        lambda _pkg: ModuleRegistry(modules=()),
+    )
 
     app = create_app()
     client = TestClient(app)
@@ -97,7 +114,9 @@ def test_bootstrap_logs_loaded_modules(caplog, monkeypatch) -> None:
     fake_registry = ModuleRegistry(
         modules=(FakeModule("health", "/health"), FakeModule("echo", "/echo"))
     )
-    monkeypatch.setattr(bootstrap_mod.ModuleRegistry, "from_package", lambda _pkg: fake_registry)
+    monkeypatch.setattr(
+        bootstrap_mod.ModuleRegistry, "from_package", lambda _pkg: fake_registry
+    )
 
     logged_messages: list[str] = []
 
@@ -110,7 +129,9 @@ def test_bootstrap_logs_loaded_modules(caplog, monkeypatch) -> None:
 
     assert hasattr(app.state, "enabled_modules")
     assert [m.name for m in app.state.enabled_modules] == ["health", "echo"]
-    assert any("Modules loaded successfully in API" in message for message in logged_messages)
+    assert any(
+        "Modules loaded successfully in API" in message for message in logged_messages
+    )
     assert any("health" in message for message in logged_messages)
     assert any("echo" in message for message in logged_messages)
 

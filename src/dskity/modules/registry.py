@@ -56,8 +56,12 @@ class ModuleRegistry:
                 enabled = bool(getattr(module_cfg, "enabled"))
             else:
                 # Compat: old format (<name>.enabled)
-                legacy_cfg = cfg.get(module.meta.name, {}) if isinstance(cfg, dict) else {}
-                enabled = bool(getattr(legacy_cfg, "get", lambda *_: True)("enabled", True))
+                legacy_cfg = (
+                    cfg.get(module.meta.name, {}) if isinstance(cfg, dict) else {}
+                )
+                enabled = bool(
+                    getattr(legacy_cfg, "get", lambda *_: True)("enabled", True)
+                )
 
             if enabled:
                 yield module

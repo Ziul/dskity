@@ -64,21 +64,23 @@ store = "consul"
     assert cfg.kv.store == "consul"
 
 
-def test_load_config_falls_back_to_settings_yaml_in_cwd(tmp_path: Path, monkeypatch) -> None:
-        settings_path = tmp_path / "settings.yaml"
-        settings_path.write_text(
-                """
+def test_load_config_falls_back_to_settings_yaml_in_cwd(
+    tmp_path: Path, monkeypatch
+) -> None:
+    settings_path = tmp_path / "settings.yaml"
+    settings_path.write_text(
+        """
 common:
     internal_base_url: "http://yaml-fallback.example.com"
 kv:
     store: "redis"
 """,
-                encoding="utf-8",
-        )
+        encoding="utf-8",
+    )
 
-        monkeypatch.chdir(tmp_path)
+    monkeypatch.chdir(tmp_path)
 
-        cfg = load_config()
+    cfg = load_config()
 
-        assert cfg.common.internal_base_url == "http://yaml-fallback.example.com"
-        assert cfg.kv.store == "redis"
+    assert cfg.common.internal_base_url == "http://yaml-fallback.example.com"
+    assert cfg.kv.store == "redis"

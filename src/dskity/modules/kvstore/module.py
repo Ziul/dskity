@@ -10,6 +10,7 @@ from biostation_api.core.kvstore.ring import ring_from_runtime
 from biostation_api.core.modules.contracts import Module, ModuleMeta
 from biostation_api.core.registry.store import RegistryStore
 
+
 @dataclass(frozen=True)
 class KvStoreModule(Module):
     meta: ModuleMeta = ModuleMeta(name="kvstore", base_path="")

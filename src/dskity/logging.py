@@ -22,10 +22,14 @@ def _level_from_env(default: str = "INFO") -> str:
 def build_logging_config(*, level: str | None = None) -> dict[str, Any]:
     lvl = (level or _level_from_env()).upper()
 
-    default_fmt = "%(asctime)s %(levelname)s %(name)s request_id=%(request_id)s - %(message)s"
+    default_fmt = (
+        "%(asctime)s %(levelname)s %(name)s request_id=%(request_id)s - %(message)s"
+    )
     # For uvicorn.access, using %(message)s is more robust: Uvicorn already formats
     # the access line and not every LogRecord will have client_addr/request_line/status_code.
-    access_fmt = "%(asctime)s %(levelname)s %(name)s request_id=%(request_id)s - %(message)s"
+    access_fmt = (
+        "%(asctime)s %(levelname)s %(name)s request_id=%(request_id)s - %(message)s"
+    )
 
     return {
         "version": 1,
@@ -36,8 +40,16 @@ def build_logging_config(*, level: str | None = None) -> dict[str, Any]:
         "formatters": {
             # Important: uvicorn.access does not populate client_addr/request_line/status_code
             # in a standard formatter; it requires Uvicorn's AccessFormatter.
-            "default": {"()": "uvicorn.logging.DefaultFormatter", "fmt": default_fmt, "use_colors": None},
-            "access": {"()": "uvicorn.logging.AccessFormatter", "fmt": access_fmt, "use_colors": None},
+            "default": {
+                "()": "uvicorn.logging.DefaultFormatter",
+                "fmt": default_fmt,
+                "use_colors": None,
+            },
+            "access": {
+                "()": "uvicorn.logging.AccessFormatter",
+                "fmt": access_fmt,
+                "use_colors": None,
+            },
         },
         "handlers": {
             "console": {
@@ -60,8 +72,16 @@ def build_logging_config(*, level: str | None = None) -> dict[str, Any]:
         "loggers": {
             # Uvicorn
             "uvicorn": {"level": lvl, "handlers": ["console"], "propagate": False},
-            "uvicorn.error": {"level": lvl, "handlers": ["console"], "propagate": False},
-            "uvicorn.access": {"level": lvl, "handlers": ["access_console"], "propagate": False},
+            "uvicorn.error": {
+                "level": lvl,
+                "handlers": ["console"],
+                "propagate": False,
+            },
+            "uvicorn.access": {
+                "level": lvl,
+                "handlers": ["access_console"],
+                "propagate": False,
+            },
             # FastAPI
             "fastapi": {"level": lvl, "handlers": ["console"], "propagate": False},
             # fastapi-cli (common names)

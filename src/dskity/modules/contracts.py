@@ -30,4 +30,6 @@ class TransportClients:
 class Module(Protocol):
     meta: ModuleMeta
 
-    def register(self, clients: TransportClients, config: DSkitySettings | dict) -> None: ...
+    def register(
+        self, clients: TransportClients, config: DSkitySettings | dict
+    ) -> None: ...

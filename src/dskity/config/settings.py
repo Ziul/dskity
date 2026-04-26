@@ -32,7 +32,7 @@ class CommonSettings(BaseModel):
     """Common settings (common.*)"""
 
     internal_base_url: str = "http://127.0.0.1:8000"
-    advertise_url: str  = "http://127.0.0.1:8000"
+    advertise_url: str = "http://127.0.0.1:8000"
     registry: RegistrySettings = Field(default_factory=RegistrySettings)
 
 
@@ -189,7 +189,7 @@ class DSkitySettings(BaseSettings):
     common: CommonSettings = Field(default_factory=CommonSettings)
     kv: KvSettings = Field(default_factory=KvSettings)
     modules: ModulesSettings = Field(default_factory=ModulesSettings)
-    modules_search_paths: list[str] = Field(default_factory=lambda: ["dskity.modules"])
+    modules_search_paths: list[str] = Field(default_factory=lambda: ["modules"])
 
     @field_validator("modules_search_paths", mode="before")
     @classmethod
@@ -300,7 +300,9 @@ def _apply_env_vars_to_dict(target_dict: dict[str, Any]) -> None:
 
 
 def _smart_merge(
-    current_dict: dict[str, Any], yaml_dict: dict[str, Any], default_dict: dict[str, Any]
+    current_dict: dict[str, Any],
+    yaml_dict: dict[str, Any],
+    default_dict: dict[str, Any],
 ) -> dict[str, Any]:
     """Smart merge: YAML overrides defaults, but not env vars.
 

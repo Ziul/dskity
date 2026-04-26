@@ -120,7 +120,9 @@ class RedisKVBackend(KVBackend):
     @classmethod
     def from_config(cls, config: dict) -> "RedisKVBackend":
         if redis is None:
-            raise RuntimeError("Redis dependency not installed. Install with: uv sync --extra kvstore-redis")
+            raise RuntimeError(
+                "Redis dependency not installed. Install with: uv sync --extra kvstore-redis"
+            )
 
         kv_cfg = _kv_cfg(config)
         redis_cfg = (kv_cfg or {}).get("redis", {}) if isinstance(kv_cfg, dict) else {}
@@ -139,7 +141,9 @@ class RedisKVBackend(KVBackend):
             redis_cfg.get("password") if isinstance(redis_cfg, dict) else None
         )
         key_prefix = cls._normalize_prefix(
-            str(redis_cfg.get("key_prefix") or "") if isinstance(redis_cfg, dict) else ""
+            str(redis_cfg.get("key_prefix") or "")
+            if isinstance(redis_cfg, dict)
+            else ""
         )
 
         default_ttl_seconds = None
@@ -153,7 +157,11 @@ class RedisKVBackend(KVBackend):
             kwargs["password"] = str(password)
 
         client = redis.Redis.from_url(str(url), **kwargs)
-        return cls(client=client, key_prefix=key_prefix, default_ttl_seconds=default_ttl_seconds)
+        return cls(
+            client=client,
+            key_prefix=key_prefix,
+            default_ttl_seconds=default_ttl_seconds,
+        )
 
     def _effective_ttl(self, ttl_seconds: int | None) -> int | None:
         ttl = ttl_seconds if ttl_seconds is not None else self.default_ttl_seconds
@@ -228,7 +236,9 @@ class ConsulKVBackend(KVBackend):
             )
 
         kv_cfg = _kv_cfg(config)
-        consul_cfg = (kv_cfg or {}).get("consul", {}) if isinstance(kv_cfg, dict) else {}
+        consul_cfg = (
+            (kv_cfg or {}).get("consul", {}) if isinstance(kv_cfg, dict) else {}
+        )
 
         url = (
             os.getenv("DSKITY_CONSUL_URL")
@@ -243,9 +253,13 @@ class ConsulKVBackend(KVBackend):
             or (consul_cfg.get("token") if isinstance(consul_cfg, dict) else None)
         )
 
-        dc = os.getenv("DSKITY_CONSUL_DC") or (consul_cfg.get("dc") if isinstance(consul_cfg, dict) else None)
+        dc = os.getenv("DSKITY_CONSUL_DC") or (
+            consul_cfg.get("dc") if isinstance(consul_cfg, dict) else None
+        )
 
-        verify = consul_cfg.get("verify", True) if isinstance(consul_cfg, dict) else True
+        verify = (
+            consul_cfg.get("verify", True) if isinstance(consul_cfg, dict) else True
+        )
 
         parsed = urllib.parse.urlparse(str(url))
         scheme = parsed.scheme or "http"
@@ -253,15 +267,23 @@ class ConsulKVBackend(KVBackend):
         port = int(parsed.port or (8501 if scheme == "https" else 8500))
 
         key_prefix = cls._normalize_prefix(
-            str(consul_cfg.get("key_prefix") or "") if isinstance(consul_cfg, dict) else ""
+            str(consul_cfg.get("key_prefix") or "")
+            if isinstance(consul_cfg, dict)
+            else ""
         )
 
         default_ttl_seconds = None
         if isinstance(kv_cfg, dict) and kv_cfg.get("default_ttl_seconds") is not None:
             default_ttl_seconds = int(kv_cfg.get("default_ttl_seconds"))
 
-        client = consul.Consul(host=host, port=port, scheme=scheme, token=token, dc=dc, verify=verify)
-        return cls(client=client, key_prefix=key_prefix, default_ttl_seconds=default_ttl_seconds)
+        client = consul.Consul(
+            host=host, port=port, scheme=scheme, token=token, dc=dc, verify=verify
+        )
+        return cls(
+            client=client,
+            key_prefix=key_prefix,
+            default_ttl_seconds=default_ttl_seconds,
+        )
 
     def _k(self, key: str) -> str:
         # Consul KV uses path-style keys. Keep prefix as a namespace.
@@ -354,6 +376,8 @@ def backend_from_config(config: dict | DSkitySettings) -> tuple[str, KVBackend]:
 
     # Keep names aligned with ecosystem (Cortex) and fail with explicit errors.
     if store in {"etcd"}:
-        raise NotImplementedError(f"kv.store='{store}' is not implemented yet. Use 'inmemory' for now.")
+        raise NotImplementedError(
+            f"kv.store='{store}' is not implemented yet. Use 'inmemory' for now."
+        )
 
     raise ValueError(f"invalid kv.store: {store}")

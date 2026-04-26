@@ -79,14 +79,18 @@ def ring_from_config(config: dict[str, Any]) -> tuple[HashRing, str]:
     for raw in raw_nodes:
         if not isinstance(raw, dict):
             continue
-        node = RingNode(id=str(raw.get("id", "")), base_url=str(raw.get("base_url", "")))
+        node = RingNode(
+            id=str(raw.get("id", "")), base_url=str(raw.get("base_url", ""))
+        )
         if node.id and node.base_url:
             nodes.append(node)
 
     return HashRing(nodes=nodes, vnodes=vnodes), str(node_id)
 
 
-def ring_from_runtime(app: Any, config: dict[str, Any], *, service: str = "kvstore") -> tuple[HashRing, str]:
+def ring_from_runtime(
+    app: Any, config: dict[str, Any], *, service: str = "kvstore"
+) -> tuple[HashRing, str]:
     """Build the ring from service discovery (registry) when available.
 
     Loki/Cortex-style pattern: the set of instances comes from the KV (service discovery),
@@ -146,7 +150,9 @@ def ring_from_runtime(app: Any, config: dict[str, Any], *, service: str = "kvsto
         for raw in raw_nodes:
             if not isinstance(raw, dict):
                 continue
-            node = RingNode(id=str(raw.get("id", "")), base_url=str(raw.get("base_url", "")))
+            node = RingNode(
+                id=str(raw.get("id", "")), base_url=str(raw.get("base_url", ""))
+            )
             if node.id and node.base_url:
                 nodes.append(node)
 

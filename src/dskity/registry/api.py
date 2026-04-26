@@ -61,7 +61,11 @@ def services_html(request: Request) -> HTMLResponse:
             "</tr>"
         )
 
-    body = "".join(trs) if trs else "<tr><td colspan='5'>No services registered yet</td></tr>"
+    body = (
+        "".join(trs)
+        if trs
+        else "<tr><td colspan='5'>No services registered yet</td></tr>"
+    )
 
     page = f"""<!doctype html>
 <html lang='en'>
@@ -111,7 +115,11 @@ def list_instances_json(service: str, request: Request) -> dict:
     reg = _registry(request)
     if reg is None:
         return {"enabled": False, "service": service, "instances": []}
-    return {"enabled": True, "service": service, "instances": reg.list_instances(service)}
+    return {
+        "enabled": True,
+        "service": service,
+        "instances": reg.list_instances(service),
+    }
 
 
 @router.get("/config", response_class=HTMLResponse)
@@ -135,7 +143,11 @@ def config_html(request: Request) -> HTMLResponse:
             return f"<span style='color: #00a;'>{v}</span>"
         if isinstance(v, str):
             # Highlight potential credentials
-            if any(word in v.lower() for word in ["password", "token", "secret"]) or "://" in v and "@" in v:
+            if (
+                any(word in v.lower() for word in ["password", "token", "secret"])
+                or "://" in v
+                and "@" in v
+            ):
                 return f"<span style='color: #d60; background: #ffc;'>{html.escape(v)}</span>"
             return html.escape(v)
         return html.escape(str(v))
@@ -152,10 +164,14 @@ def config_html(request: Request) -> HTMLResponse:
 
             if isinstance(value, dict):
                 value_html = render_dict(value, level + 1)
-                items.append(f"<div style='margin-left: {indent}px;'>{key_html}{value_html}</div>")
+                items.append(
+                    f"<div style='margin-left: {indent}px;'>{key_html}{value_html}</div>"
+                )
             else:
                 value_html = render_value(value)
-                items.append(f"<div style='margin-left: {indent}px;'>{key_html} {value_html}</div>")
+                items.append(
+                    f"<div style='margin-left: {indent}px;'>{key_html} {value_html}</div>"
+                )
 
         return "".join(items)
 
