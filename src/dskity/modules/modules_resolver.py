@@ -124,7 +124,7 @@ class ModulesResolver:
     def paths(self, service: str) -> list[str]:
         results = []
         for route in self.app.router.routes:
-            if isinstance(route, (fastapi.routing.APIRoute, fastapi.routing.WebSocketRoute)):
+            if isinstance(route, (fastapi.routing.APIRoute, fastapi.routing.APIWebSocketRoute)):
                 if route.tags and service in route.tags:
                     results.append(route.path)
         return results

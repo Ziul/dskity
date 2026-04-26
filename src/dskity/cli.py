@@ -42,8 +42,9 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="Path to a TOML or YAML config file that overrides the defaults",
     )
-    parser.add_argument("--host", "-H", default=None)
-    parser.add_argument("--port", "-p", type=int, default=None)
+    parser.add_argument("--host", "-H", default="0.0.0.0")
+    parser.add_argument("--port", "-p", type=int, default=8000)
+    parser.add_argument("--log-level", "-l", default='INFO', dest="log_level", help="Set log level of the application")
     parser.add_argument(
         "--advertise-url",
         dest="advertise_url",
@@ -67,6 +68,7 @@ def main(argv: list[str] | None = None) -> int:
 
     # Garante que o bootstrap use o YAML escolhido.
     os.environ["DSKITY_CONFIG"] = config_path
+    log_level = os.environ.get("SDKITY_LOG_LEVEL", args.log_level).lower()
 
     targets = _parse_targets(args.targets)
     if targets:
@@ -78,8 +80,11 @@ def main(argv: list[str] | None = None) -> int:
     host = args.host or "0.0.0.0"
     port = args.port or 8000
     if args.advertise_url:
-        advertise_url = args.advertise_url or f"http://{host}:{port}"
-        os.environ["DSKITY_ADVERTISE_URL"] = advertise_url
+        advertise_url = args.advertise_url
+    else:
+        advertise_url = f"http://{host}:{port}"
+    os.environ["DSKITY_ADVERTISE_URL"] = advertise_url
+    
 
     os.environ["DSKITY_PORT"] = str(port)
     os.environ["DSKITY_HOST"] = host
@@ -91,7 +96,7 @@ def main(argv: list[str] | None = None) -> int:
         port=port,
         reload=True,
         env_file=None,
-        log_level="info",
+        log_level=log_level,
         log_config=log_config,
     )
     return 0

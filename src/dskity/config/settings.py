@@ -32,7 +32,7 @@ class CommonSettings(BaseModel):
     """Common settings (common.*)"""
 
     internal_base_url: str = "http://127.0.0.1:8000"
-    advertise_url: str | None = None
+    advertise_url: str  = "http://127.0.0.1:8000"
     registry: RegistrySettings = Field(default_factory=RegistrySettings)
 
 
