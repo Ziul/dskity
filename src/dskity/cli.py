@@ -81,6 +81,8 @@ def main(argv: list[str] | None = None) -> int:
         advertise_url = args.advertise_url or f"http://{host}:{port}"
         os.environ["DSKITY_ADVERTISE_URL"] = advertise_url
 
+    os.environ["DSKITY_PORT"] = str(port)
+    os.environ["DSKITY_HOST"] = host
     log_config = configure_logging()
 
     uvicorn.run(

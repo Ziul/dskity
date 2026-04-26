@@ -4,6 +4,7 @@ import random
 from dataclasses import dataclass
 from typing import Any
 
+import fastapi.routing
 from fastapi import FastAPI
 
 from dskity.registry.service_registry import ServiceRegistry
@@ -102,23 +103,46 @@ class ModulesResolver:
 
         # Fallback: use common.internal_base_url and the module's known base_path.
         common = cfg.get("common", {}) if isinstance(cfg, dict) else {}
-        internal_base_url = None
+        internal_base_url = ""
         if isinstance(common, dict):
             internal_base_url = common.get("internal_base_url")
 
         if not isinstance(internal_base_url, str) or not internal_base_url:
             return []
 
-        base_path = None
+        base_path = ""
         for m in getattr(self.app.state, "enabled_modules", []) or []:
             if getattr(m, "name", None) == service:
-                base_path = getattr(m, "base_path", None)
+                base_path = getattr(m, "base_path", "")
                 break
 
         if not isinstance(base_path, str) or not base_path:
             return []
 
         return [_join_url(internal_base_url, base_path)]
+
+    def paths(self, service: str) -> list[str]:
+        results = []
+        for route in self.app.router.routes:
+            if isinstance(route, (fastapi.routing.APIRoute, fastapi.routing.WebSocketRoute)):
+                if route.tags and service in route.tags:
+                    results.append(route.path)
+        return results
+    
+    def base_path(self, service: str) -> str:
+        urls = self.paths(service)
+        if not urls:
+            return ""
+        # Return the longest common prefix of the paths as the base path
+        split_paths = [u.strip("/").split("/") for u in urls]
+        prefix = []
+
+        for parts in zip(*split_paths):
+            if all(p == parts[0] for p in parts):
+                prefix.append(parts[0])
+            else:
+                break
+        return "/" + "/".join(prefix) if prefix else ""
 
     def get(self, service: str, default: str | None = None) -> str | None:
         urls = self.urls(service)
