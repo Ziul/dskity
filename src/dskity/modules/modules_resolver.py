@@ -4,10 +4,12 @@ import random
 from dataclasses import dataclass
 from typing import Any
 
+import logging
 import fastapi.routing
 from fastapi import FastAPI
 
 from dskity.registry.service_registry import ServiceRegistry
+from dskity.network import get_current_host_port
 
 
 def _join_url(base_url: str, route: str) -> str:
@@ -79,14 +81,15 @@ class ModulesResolver:
 
     def urls(self, service: str) -> list[str]:
         service = str(service).strip()
+        urls: list[str] = []
         if not service:
-            return []
+            return urls
 
         store = getattr(self.app.state, "registry_store", None)
         if store is not None:
+            logging.warning(f"Looking up service '{service}' in registry store")
             reg = ServiceRegistry(store=store)
             instances = reg.list_instances(service)
-            urls: list[str] = []
             for inst in instances:
                 url = inst.get("url")
                 if isinstance(url, str) and url:
@@ -97,34 +100,24 @@ class ModulesResolver:
                 if isinstance(base_url, str) and base_url:
                     urls.append(_join_url(base_url, str(route or "")))
             if urls:
+                logging.warning(f"Found URLs for service '{service}' in registry store: {urls}")
                 return urls
 
         # Fallback (config): allow defining fixed URLs per module when discovery is not shared.
         # E.g.: with kv.store=inmemory in separate processes.
         cfg: dict[str, Any] = getattr(self.app.state, "config", {}) or {}
-        static_urls = _static_urls_from_config(cfg, service)
-        if static_urls:
-            return static_urls
+        urls = _static_urls_from_config(cfg, service)
+        if urls:
+            logging.warning(f"Found URLs for service '{service}' in static config: {urls}")
+            return urls
+        logging.warning(f"No URLs found for service '{service}' in registry store or static config, trying internal base URL fallback")
 
-        # Fallback: use common.internal_base_url and the module's known base_path.
-        common = cfg.get("common", {}) if isinstance(cfg, dict) else {}
-        internal_base_url = ""
-        if isinstance(common, dict):
-            internal_base_url = common.get("internal_base_url")
+        # Fallback: use internal base URL with current host and port. This allows modules to call each other using the internal network even if they are not registered in the registry store or configured with static URLs.
+        host,port = get_current_host_port()
+        base_url = f"http://{host}:{port}".rstrip("/")
+        logging.warning(f"Using base URL for service '{service}': {base_url}")
 
-        if not isinstance(internal_base_url, str) or not internal_base_url:
-            return []
-
-        base_path = ""
-        for m in getattr(self.app.state, "enabled_modules", []) or []:
-            if getattr(m, "name", None) == service:
-                base_path = getattr(m, "base_path", "")
-                break
-
-        if not isinstance(base_path, str) or not base_path:
-            return []
-
-        return [_join_url(internal_base_url, base_path)]
+        return [base_url]
 
     def paths(self, service: str) -> list[str]:
         results = []

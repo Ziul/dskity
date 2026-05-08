@@ -26,8 +26,12 @@ class HealthModule(Module):
 
         @router.get("/fatorial/{number}")
         async def fatorial(number: int, request: Request) -> int:
+            if not isinstance(number, int) or number < 0:
+                logging.warning(f"Invalid input for fatorial: {number}")
+                raise HTTPException(status_code=400, detail="Invalid input: number must be a positive integer")
 
-            echo = clients.http.modules.get("echo")
+            logging.info(f"Received fatorial request for number={number}")
+            echo = clients.http.modules.get("health")
 
             logging.info(
                 f"Fatorial called with number={number}, echo service at {echo}"
@@ -44,6 +48,9 @@ class HealthModule(Module):
             try:
                 async with httpx.AsyncClient(timeout=20.0) as client:
                     resp = await client.get(url, headers=headers)
+                    if resp.status_code != 200:
+                        logging.error(f"Error response from echo service: {resp.status_code} - {resp.text}")
+                        raise HTTPException(status_code=502, detail=f"fatorial_request_failed: echo service returned status code {resp.status_code}")
 
                 result = resp.json()
                 return number * result
