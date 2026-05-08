@@ -22,7 +22,7 @@ def _parse_targets(values: list[str] | None) -> list[str]:
             if p:
                 parts.append(p)
 
-    # mantém ordem (remove duplicados)
+    # Keep order (removes duplicates)
     seen: set[str] = set()
     ordered: list[str] = []
     for p in parts:
@@ -72,9 +72,11 @@ def main(argv: list[str] | None = None) -> int:
 
     config_path = resolve_config_path(args.config_path)
 
-    # Garante que o bootstrap use o YAML escolhido.
+    # Ensure the bootstrap uses the chosen YAML.
     os.environ["DSKITY_CONFIG"] = config_path
-    log_level = os.environ.get("SDKITY_LOG_LEVEL", args.log_level).lower()
+    log_level = os.environ.get("DSKITY_LOG_LEVEL", args.log_level).lower()
+    # Store log level in environment so configure_logging() uses it when app is imported
+    os.environ["DSKITY_LOG_LEVEL"] = log_level.upper()
 
     targets = _parse_targets(args.targets)
     if targets:
@@ -82,7 +84,7 @@ def main(argv: list[str] | None = None) -> int:
     else:
         os.environ.pop("DSKITY_TARGETS", None)
 
-    # Base URL anunciada para discovery (inferida a partir do host/port escolhidos).
+    # Advertised base URL for discovery (inferred from the chosen host/port).
     host = args.host or "0.0.0.0"
     port = args.port or 8000
     if args.advertise_url:
@@ -93,7 +95,7 @@ def main(argv: list[str] | None = None) -> int:
 
     os.environ["DSKITY_PORT"] = str(port)
     os.environ["DSKITY_HOST"] = host
-    log_config = configure_logging()
+    log_config = configure_logging(level=log_level)
 
     uvicorn.run(
         "dskity.app:app",

@@ -103,11 +103,11 @@ def ring_from_runtime(
     # Prefer the global process instance_id (published in the registry), if present.
     instance_id = getattr(getattr(app, "state", None), "instance_id", None)
 
-    # config agora é DSkitySettings (Pydantic model)
+    # config is now DSkitySettings (Pydantic model)
     kv_cfg = config.kv if config else None
     node_id = instance_id
     if not node_id and kv_cfg:
-        # Tenta pegar node_id da config (se tiver)
+        # Try to get node_id from config (if available)
         node_id = getattr(kv_cfg, "node_id", None)
     if not node_id:
         node_id = generate_node_id()

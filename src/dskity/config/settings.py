@@ -253,7 +253,7 @@ def load_config_from_yaml(
     # Parse env vars using the rule: DSKITY_KEY1__KEY2__KEY3 = common.registry.enabled
     _apply_env_vars_to_dict(result_dict)
 
-    # Reconstrói instância
+    # Rebuilds instance
     return DSkitySettings.model_validate(result_dict)
 
 

@@ -54,7 +54,7 @@ def _resolve_modules_search_paths(config, config_path: str | None) -> list[Path]
         if not entry:
             continue
 
-        # Apenas entradas com aparência de caminho de filesystem entram no sys.path.
+        # Only filesystem-like entries should be added to sys.path.
         if "/" not in entry and "\\" not in entry and not entry.startswith((".", "~")):
             continue
 
@@ -115,7 +115,7 @@ def bootstrap(app: FastAPI) -> None:
     config_path = os.getenv("DSKITY_CONFIG")
     config = load_config(override_path=config_path)
 
-    # Salva config no app.state para acesso posterior
+    # Store config in app.state for later access
     app.state.config = config
 
     targets_env = os.getenv("DSKITY_TARGETS")
@@ -124,29 +124,29 @@ def bootstrap(app: FastAPI) -> None:
         parts = [p.strip() for p in targets_env.split(",")]
         target_modules = {p for p in parts if p}
 
-    # Disponibiliza a configuração completa em runtime.
-    # Útil para handlers/middlewares e módulos que precisem consultar settings depois do bootstrap.
+    # Make the full configuration available at runtime.
+    # Useful for handlers/middlewares and modules that need to query settings after bootstrap.
     app.state.config = config
     app.state.config_path = config_path
 
-    # Métricas Prometheus (HTTP) + endpoint /metrics.
+    # Prometheus metrics (HTTP) + /metrics endpoint.
     install_metrics(app)
 
-    # Resolver de módulos: permite obter URL de um módulo por nome.
-    # Ex.: request.app.modules.get("echo") -> URL (random entre instâncias)
+    # Module resolver: allows getting the URL of a module by name.
+    # E.g.: request.app.modules.get("echo") -> URL (random among instances)
     app.modules = ModulesResolver(app)  # type: ignore[attr-defined]
 
     @app.middleware("http")
     async def _modules_resolver_middleware(request, call_next):
-        # Garante que o resolver exista na instância do app em runtime.
+        # Ensure the resolver exists in the app instance at runtime.
         if not hasattr(request.app, "modules"):
             request.app.modules = ModulesResolver(request.app)  # type: ignore[attr-defined]
         return await call_next(request)
 
-    # advertise_url: URL publicada no discovery (separada do listen host/port).
-    # config agora é DSkitySettings (Pydantic model), não um dict
-    # NOTA: Se não configurado explicitamente, não definimos advertise_url com fallback de porta.
-    # O heartbeat e middleware cuidam do registro com a porta correta.
+    # advertise_url: URL published to discovery (separate from listen host/port).
+    # config is now DSkitySettings (Pydantic model), not a dict
+    # NOTE: If not explicitly configured, we don't set advertise_url with port fallback.
+    # The heartbeat and middleware handle registration with the correct port.
     if config.common.advertise_url:
         advertise_url = config.common.advertise_url
     else:
@@ -162,7 +162,7 @@ def bootstrap(app: FastAPI) -> None:
         else None
     )
 
-    # Acessa registry config via atributos do Pydantic model
+    # Access registry config via Pydantic model attributes
     if config and config.common.registry:
         app.state.registry_ttl_seconds = config.common.registry.ttl_seconds or 60
         app.state.registry_heartbeat_interval_seconds = (
@@ -173,20 +173,20 @@ def bootstrap(app: FastAPI) -> None:
         app.state.registry_ttl_seconds = 60
         app.state.registry_heartbeat_interval_seconds = 30
 
-    # Identidade desta instância (processo) para discovery.
+    # Identity of this instance (process) for discovery.
     app.state.instance_id = generate_node_id()
 
-    # Inicializa um store compartilhável para service discovery (registry).
-    # Padrão desejado (estilo Loki/Cortex): o registry é um recurso de core e pode estar
-    # habilitado mesmo que o módulo `kvstore` (API HTTP /kv) esteja desabilitado.
+    # Initialize a shareable store for service discovery (registry).
+    # Desired pattern (Loki/Cortex style): registry is a core resource and can be
+    # enabled even if the `kvstore` module (HTTP API /kv) is disabled.
     #
-    # Compat: se `common.registry.enabled` não estiver setado, usamos o valor antigo de `kvstore.enabled`.
-    # config agora é DSkitySettings (Pydantic model)
+    # Compat: if `common.registry.enabled` is not set, we use the old `kvstore.enabled` value.
+    # config is now DSkitySettings (Pydantic model)
 
-    # Para compatibilidade com código antigo que usava modules["kvstore"],
-    # verifica se há config e acessa via atributos Pydantic
+    # For backward compatibility with code that used modules["kvstore"],
+    # check if there is config and access via Pydantic attributes
     registry_cfg = config.common.registry if config and config.common else None
-    legacy_registry_enabled = False  # Já não há módulo 'kvstore' em novo código
+    legacy_registry_enabled = False  # No 'kvstore' module in new code
 
     registry_enabled = (
         bool(registry_cfg.enabled) if registry_cfg else legacy_registry_enabled
@@ -296,7 +296,7 @@ def bootstrap(app: FastAPI) -> None:
         enabled = [m.meta.name for m in enabled_modules]
         return {"service": "dskity", "enabled_modules": enabled}
 
-    # Correlation id por request (X-Request-Id).
-    # Precisa ser o último middleware adicionado para ficar mais externo e cobrir
-    # também os middlewares HTTP (BaseHTTPMiddleware), garantindo request_id nos access logs.
+    # Correlation id per request (X-Request-Id).
+    # Must be the last middleware added to be the outermost and cover
+    # HTTP middlewares (BaseHTTPMiddleware), ensuring request_id in access logs.
     install_request_id(app)

@@ -4,7 +4,6 @@ import random
 from dataclasses import dataclass
 from typing import Any
 
-import logging
 import fastapi.routing
 from fastapi import FastAPI
 
@@ -85,9 +84,13 @@ class ModulesResolver:
         if not service:
             return urls
 
+        logger = getattr(self.app.state, "logger", None)
+        if not logger:
+            import logging
+            logger = logging.getLogger(__name__)
         store = getattr(self.app.state, "registry_store", None)
         if store is not None:
-            logging.warning(f"Looking up service '{service}' in registry store")
+            logger.debug(f"Looking up service '{service}' in registry store")
             reg = ServiceRegistry(store=store)
             instances = reg.list_instances(service)
             for inst in instances:
@@ -100,7 +103,7 @@ class ModulesResolver:
                 if isinstance(base_url, str) and base_url:
                     urls.append(_join_url(base_url, str(route or "")))
             if urls:
-                logging.warning(f"Found URLs for service '{service}' in registry store: {urls}")
+                logger.debug(f"Found URLs for service '{service}' in registry store: {urls}")
                 return urls
 
         # Fallback (config): allow defining fixed URLs per module when discovery is not shared.
@@ -108,14 +111,14 @@ class ModulesResolver:
         cfg: dict[str, Any] = getattr(self.app.state, "config", {}) or {}
         urls = _static_urls_from_config(cfg, service)
         if urls:
-            logging.warning(f"Found URLs for service '{service}' in static config: {urls}")
+            logger.debug(f"Found URLs for service '{service}' in static config: {urls}")
             return urls
-        logging.warning(f"No URLs found for service '{service}' in registry store or static config, trying internal base URL fallback")
+        logger.debug(f"No URLs found for service '{service}' in registry store or static config, trying internal base URL fallback")
 
         # Fallback: use internal base URL with current host and port. This allows modules to call each other using the internal network even if they are not registered in the registry store or configured with static URLs.
-        host,port = get_current_host_port()
+        host, port = get_current_host_port()
         base_url = f"http://{host}:{port}".rstrip("/")
-        logging.warning(f"Using base URL for service '{service}': {base_url}")
+        logger.debug(f"Using base URL for service '{service}': {base_url}")
 
         return [base_url]
 

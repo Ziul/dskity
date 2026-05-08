@@ -7,7 +7,6 @@ import socket
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
-import logging
 
 from dskity.registry.service_registry import ServiceRegistry
 
@@ -25,6 +24,7 @@ class RegistryAdvertiseMiddleware(BaseHTTPMiddleware):
         store = getattr(request.app.state, "registry_store", None)
         enabled = getattr(request.app.state, "enabled_modules", None)
         instance_id = getattr(request.app.state, "instance_id", None)
+        logger = getattr(request.app.state, "logger", None)
         if store is None or enabled is None or not instance_id:
             return response
 
@@ -33,9 +33,10 @@ class RegistryAdvertiseMiddleware(BaseHTTPMiddleware):
         ip = s.getsockname()[0]
         port = request.url.port or 80
         base_url = f"http://{ip}:{port}".rstrip("/")
-        logging.info(
-            f"Determined base_url as {base_url} for service registry advertisement."
-        )
+        if logger:
+            logger.info(
+                f"Determined base_url as {base_url} for service registry advertisement."
+            )
 
         registry = ServiceRegistry(store=store)
 
