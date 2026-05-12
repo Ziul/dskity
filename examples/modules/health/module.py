@@ -51,7 +51,7 @@ class HealthModule(Module):
             logger.debug(f"Calling {url} with headers {headers}")
 
             try:
-                async with httpx.AsyncClient(timeout=20.0) as client:
+                async with httpx.AsyncClient(timeout=200.0) as client:
                     resp = await client.get(url, headers=headers)
                     if resp.status_code != 200:
                         logger.error(f"Error response from echo service: {resp.status_code} - {resp.text}")
