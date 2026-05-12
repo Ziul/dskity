@@ -31,4 +31,3 @@ jobs:
     uses: ./.github/workflows/build.yaml
     secrets:
       UV_PUBLISH_TOKEN: ${{ secrets.UV_PUBLISH_TOKEN }}
-      PYPI_API_TOKEN: ${{ secrets.PYPI_API_TOKEN }}

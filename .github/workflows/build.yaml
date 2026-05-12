@@ -7,9 +7,6 @@ on:
       UV_PUBLISH_TOKEN:
         required: false
         description: Token for publishing to PyPI/uv registry
-      PYPI_API_TOKEN:
-        required: false
-        description: PyPI API token for publishing packages
     outputs:
       version:
         description: version created on this build
@@ -83,7 +80,5 @@ jobs:
           uv version ${{ needs.versioning.outputs.MajorMinorPatch }}
           uv build
       - name: Publish to PyPI
-        env:
-          UV_PUBLISH_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
         run: |
           uv publish
