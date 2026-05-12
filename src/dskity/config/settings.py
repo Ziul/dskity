@@ -226,8 +226,12 @@ def load_config_from_yaml(
 ) -> DSkitySettings:
     """Load configuration from a YAML dict with precedence of env vars.
 
+    If a 'name' field exists in yaml_data, it will be used as the env var prefix
+    (e.g., if name='myapp', env vars like MYAPP_COMMON__SETTING will be used).
+    Otherwise, defaults to 'DSKITY_'.
+
     Precedence (highest to lowest):
-    1. Environment variables (DSKITY_*)
+    1. Environment variables ({prefix}*)
     2. YAML data
     3. Default values
 
@@ -239,6 +243,13 @@ def load_config_from_yaml(
         DSkitySettings with all values validated
     """
 
+    # Extract prefix from yaml_data if 'name' exists
+    prefix = "dskity_"
+    if yaml_data and isinstance(yaml_data, dict) and "name" in yaml_data:
+        name = yaml_data.get("name")
+        if isinstance(name, str) and name.strip():
+            prefix = f"{name.strip().lower()}_"
+
     # If there's no YAML, just use values from the environment
     if not yaml_data:
         return DSkitySettings()
@@ -249,25 +260,30 @@ def load_config_from_yaml(
     # Start with YAML
     result_dict = dict(yaml_data)
 
-    # Now apply env vars (DSKITY_*) over the yaml dict
-    # Parse env vars using the rule: DSKITY_KEY1__KEY2__KEY3 = common.registry.enabled
-    _apply_env_vars_to_dict(result_dict)
+    # Now apply env vars with the extracted or default prefix over the yaml dict
+    # Parse env vars using the rule: {PREFIX}KEY1__KEY2__KEY3 = common.registry.enabled
+    _apply_env_vars_to_dict(result_dict, prefix=prefix)
 
     # Rebuilds instance
     return DSkitySettings.model_validate(result_dict)
 
 
-def _apply_env_vars_to_dict(target_dict: dict[str, Any]) -> None:
-    """Apply env vars (DSKITY_*) to the configuration dict (in-place).
+def _apply_env_vars_to_dict(target_dict: dict[str, Any], prefix: str = "dskity_") -> None:
+    """Apply env vars with given prefix to the configuration dict (in-place).
 
-    Format: DSKITY_SECTION__SUBSECTION__KEY = value
+    Format: {PREFIX}SECTION__SUBSECTION__KEY = value
     Example: DSKITY_COMMON__INTERNAL_BASE_URL = "http://api.com"
+    Example with custom prefix: MYAPP_COMMON__INTERNAL_BASE_URL = "http://api.com"
 
-    Case-insensitive for the key (DSKITY_ works in any case).
+    Args:
+        target_dict: Configuration dictionary to modify
+        prefix: Environment variable prefix to look for (lowercase, with trailing _)
+
+    Case-insensitive for the key.
     """
     import os
 
-    prefix_lower = "dskity_"
+    prefix_lower = prefix.lower()
 
     for env_key, env_value in os.environ.items():
         env_key_lower = env_key.lower()

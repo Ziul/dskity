@@ -14,18 +14,15 @@ class HealthModule(Module):
 
     def register(self, clients: TransportClients, config: DSkitySettings) -> None:
         router = APIRouter(prefix=self.meta.base_path, tags=[self.meta.name])
-        # Capture logger from app.state
-        logger = getattr(clients.http.state, "logger", None)
-        if not logger:
-            import logging
-            logger = logging.getLogger(__name__)
-        logger.name = f"{logger.name}.health"
+        # Capture logger clients for use in route handlers
+        logger = clients.get_logger(self.meta.name)
 
         @router.get("/live")
         def live() -> dict:
             return {"status": "ok"}
 
         @router.get("/ready")
+        @router.post("/ready", dependencies=[])
         def ready() -> dict:
             return {"status": "ok"}
 
@@ -51,7 +48,7 @@ class HealthModule(Module):
             logger.debug(f"Calling {url} with headers {headers}")
 
             try:
-                async with httpx.AsyncClient(timeout=200.0) as client:
+                async with httpx.AsyncClient(timeout=20.0) as client:
                     resp = await client.get(url, headers=headers)
                     if resp.status_code != 200:
                         logger.error(f"Error response from echo service: {resp.status_code} - {resp.text}")

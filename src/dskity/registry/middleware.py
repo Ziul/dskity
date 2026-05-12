@@ -34,7 +34,7 @@ class RegistryAdvertiseMiddleware(BaseHTTPMiddleware):
         port = request.url.port or 80
         base_url = f"http://{ip}:{port}".rstrip("/")
         if logger:
-            logger.info(
+            logger.debug(
                 f"Determined base_url as {base_url} for service registry advertisement."
             )
 
