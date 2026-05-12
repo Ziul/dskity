@@ -41,7 +41,6 @@ jobs:
           useConfigFile: true
           configFilePath: .github/GitVersion.yaml
       - id: output
-        if: github.event_name != 'release'
         run: |
           if [[ "${{ github.event_name }}" != "release" ]]; then
             echo "MajorMinorPatch=${{ env.GitVersion_MajorMinorPatch }}" >> "$GITHUB_OUTPUT"
