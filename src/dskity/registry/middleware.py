@@ -35,7 +35,7 @@ class RegistryAdvertiseMiddleware(BaseHTTPMiddleware):
         base_url = f"http://{ip}:{port}".rstrip("/")
         if logger:
             logger.debug(
-                f"Determined base_url as {base_url} for service registry advertisement."
+                f"Determined base_url as {base_url} for service registry advertisement with id {request.state.request_id}."
             )
 
         registry = ServiceRegistry(store=store)
