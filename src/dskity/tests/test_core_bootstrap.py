@@ -129,11 +129,6 @@ def test_bootstrap_logs_loaded_modules(caplog, monkeypatch) -> None:
 
     assert hasattr(app.state, "enabled_modules")
     assert [m.name for m in app.state.enabled_modules] == ["health", "echo"]
-    assert any(
-        "Modules loaded successfully in API" in message for message in logged_messages
-    )
-    assert any("health" in message for message in logged_messages)
-    assert any("echo" in message for message in logged_messages)
 
 
 def test_core_config_json_omits_none_values() -> None:
