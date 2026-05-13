@@ -6,6 +6,7 @@ import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 from fastapi import FastAPI
 
@@ -14,7 +15,7 @@ from dskity.kvstore.backends import backend_from_config, generate_node_id
 from dskity.metrics import install_metrics
 from dskity.modules.registry import ModuleRegistry
 from dskity.modules.contracts import TransportClients
-from dskity.transport.mqtt import MQTTClient
+from dskity.transport.mqtt import get_mqtt_client, shutdown_mqtt_client
 from dskity.transport.grpc import GRPCClient
 from dskity.modules.modules_resolver import ModulesResolver
 from dskity.request_id import install_request_id
@@ -118,6 +119,13 @@ def bootstrap(app: FastAPI) -> None:
     # Store config in app.state for later access
     app.state.config = config
 
+    # Make MQTT client_id unique by appending UUID
+    if config and config.common and config.common.mqtt and config.common.mqtt.enabled:
+        config.common.mqtt.client_id = f"{config.common.mqtt.client_id}-{uuid4().hex[:8]}"
+        app.state.logger.debug(
+            "Generated unique MQTT client_id: %s", config.common.mqtt.client_id
+        )
+
     targets_env = os.getenv("DSKITY_TARGETS")
     target_modules: set[str] | None = None
     if isinstance(targets_env, str) and targets_env.strip():
@@ -135,6 +143,33 @@ def bootstrap(app: FastAPI) -> None:
     # Module resolver: allows getting the URL of a module by name.
     # E.g.: request.app.modules.get("echo") -> URL (random among instances)
     app.modules = ModulesResolver(app)  # type: ignore[attr-defined]
+
+    # Initialize MQTT client singleton (optional, based on config)
+    async def _initialize_mqtt():
+        """Initialize MQTT client based on configuration."""
+        if config and config.common and config.common.mqtt and config.common.mqtt.enabled:
+            try:
+                logger.debug("MQTT enabled in config; initializing MQTT client...")
+                mqtt_client = await get_mqtt_client(config.common.mqtt)
+                await mqtt_client.start()
+                app.state.mqtt_client = mqtt_client
+
+                post_start_hooks = getattr(app.state, "mqtt_post_start_hooks", [])
+                for hook in post_start_hooks:
+                    await hook(mqtt_client)
+            except ImportError:
+                # MQTT habilitado, mas dependência ausente.
+                raise
+            except Exception as e:
+                # O loop de reconexão roda no cliente; aqui registramos falha inicial.
+                logger.error("Failed to initialize MQTT client: %s", e)
+            logger.info("MQTT client initialization complete.")
+
+    async def _shutdown_mqtt():
+        """Shutdown MQTT client on app shutdown."""
+        if hasattr(app.state, "mqtt_client"):
+            logger.info("Shutting down MQTT client...")
+            await shutdown_mqtt_client()
 
     @app.middleware("http")
     async def _modules_resolver_middleware(request, call_next):
@@ -248,37 +283,36 @@ def bootstrap(app: FastAPI) -> None:
     ]
 
     # Create an object grouping transport clients available to modules.
-    mqtt_client = MQTTClient()  # lightweight singleton — does not auto-connect
+    # Note: mqtt_client will be initialized in lifespan, so use getattr for safety
+    mqtt_client = getattr(app.state, "mqtt_client", None)
     grpc_client = GRPCClient()
     clients = TransportClients(http=app, grpc=grpc_client, mqtt=mqtt_client)
 
     for module in enabled_modules:
         module.register(clients=clients, config=config)
 
-    # If there is a shared store (kvstore enabled), expose discovery endpoints
-    # and auto-register modules using a base_url inferred from requests.
-    if getattr(app.state, "registry_store", None) is not None:
+    # Setup combined lifespan: MQTT initialization + Registry heartbeat (if enabled)
+    registry_enabled = getattr(app.state, "registry_store", None) is not None
+    
+    if registry_enabled:
         app.include_router(registry_router)
         app.add_middleware(RegistryAdvertiseMiddleware)
 
-        existing_lifespan = getattr(app.router, "lifespan_context", None)
-
-        @asynccontextmanager
-        async def _lifespan(inner_app: FastAPI):
-            if callable(existing_lifespan):
-                async with existing_lifespan(inner_app):
-                    start_heartbeat(
-                        inner_app,
-                        cfg=HeartbeatConfig(
-                            ttl_seconds=inner_app.state.registry_ttl_seconds,
-                            interval_seconds=inner_app.state.registry_heartbeat_interval_seconds,
-                        ),
-                    )
-                    try:
-                        yield
-                    finally:
-                        await stop_heartbeat(inner_app)
-            else:
+    @asynccontextmanager
+    async def _combined_lifespan(inner_app: FastAPI):
+        """
+        Combined lifespan handler:
+        1. Initialize MQTT client (if enabled) - will auto-reconnect if disconnected
+        2. Start registry heartbeat (if registry enabled)
+        3. Clean up on shutdown
+        """
+        # Initialize MQTT first
+        logger.info("Starting application lifespan: initializing MQTT and registry heartbeat...")
+        await _initialize_mqtt()
+        
+        try:
+            # Start registry heartbeat if enabled
+            if registry_enabled:
                 start_heartbeat(
                     inner_app,
                     cfg=HeartbeatConfig(
@@ -286,12 +320,18 @@ def bootstrap(app: FastAPI) -> None:
                         interval_seconds=inner_app.state.registry_heartbeat_interval_seconds,
                     ),
                 )
-                try:
-                    yield
-                finally:
+            
+            try:
+                yield
+            finally:
+                # Stop registry heartbeat
+                if registry_enabled:
                     await stop_heartbeat(inner_app)
+        finally:
+            # Shutdown MQTT last
+            await _shutdown_mqtt()
 
-        app.router.lifespan_context = _lifespan
+    app.router.lifespan_context = _combined_lifespan
 
     @app.get("/")
     def root() -> dict:

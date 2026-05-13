@@ -24,16 +24,19 @@ class ModuleRegistry:
             # Expect a subpackage per module, with a `module.py` exposing `get_module()`
             try:
                 module_impl = importlib.import_module(modinfo.name + ".module")
-            except ModuleNotFoundError:
-                logger.debug(f"Module not found in package '{modinfo.name}'...")
-                module_impl = importlib.import_module(modinfo.name)
-                if not hasattr(module_impl, "get_module"):
-                    logger.debug(f"Module '{modinfo.name}' does not have a 'get_module' function...")
-                    continue
-
-            get_module = getattr(module_impl, "get_module", None)
-            if callable(get_module):
-                discovered.append(get_module())
+            except ModuleNotFoundError as e:
+                logger.debug(f"Module '{modinfo.name}' not able to load ... {e}")
+                continue
+            logger.debug(f"Discovered module '{modinfo.name}'...")
+            try:
+                get_module = getattr(module_impl, "get_module", None)
+                if callable(get_module):
+                    logger.debug(f"Discovered module '{modinfo.name}'...")
+                    discovered.append(get_module())
+                else:
+                    logger.debug(f"Module '{modinfo.name}' does not have a 'get_module' function to call...")
+            except Exception as e:
+                logger.error(f"Error loading module '{modinfo.name}': {e}")
 
         return cls(modules=tuple(discovered))
 

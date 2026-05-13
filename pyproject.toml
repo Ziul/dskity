@@ -25,6 +25,7 @@ dskity = "dskity.__main__:main"
 dev = [
     "pytest>=9.0.3",
     "ruff>=0.15.12",
+    "paho-mqtt>=2.1.0",
 ]
 
 [tool.setuptools]

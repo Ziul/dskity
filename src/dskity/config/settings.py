@@ -28,12 +28,30 @@ class RegistrySettings(BaseModel):
     heartbeat_interval_seconds: int = 30
 
 
+class MQTTSettings(BaseModel):
+    """MQTT transport settings (common.mqtt.*)"""
+
+    enabled: bool = False
+    broker: str = "mqtt://localhost"
+    port: int = 1883
+    client_id: str = "dskity-client"
+    username: str | None = None
+    password: str | None = None
+    keepalive: int = 60
+    reconnect_interval_seconds: int = 10
+    protocol: str = "5.0"
+    tls_secure: bool = True
+    tls_version: str = "tlsv1_2"
+    subscribe_topics: list[str] = Field(default_factory=list)
+
+
 class CommonSettings(BaseModel):
     """Common settings (common.*)"""
 
     internal_base_url: str = "http://127.0.0.1:8000"
     advertise_url: str = "http://127.0.0.1:8000"
     registry: RegistrySettings = Field(default_factory=RegistrySettings)
+    mqtt: MQTTSettings = Field(default_factory=MQTTSettings)
 
 
 class RedisSettings(BaseModel):

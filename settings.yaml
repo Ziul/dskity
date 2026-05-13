@@ -3,6 +3,12 @@ modules_search_paths:
   - modules
   - examples.modules
 
+common:
+  mqtt:
+    enabled: false
+    host: "localhost"
+    port: 1883
+
 modules:
   health:
     enabled: true
