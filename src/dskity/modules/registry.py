@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import importlib
+import logging
 import pkgutil
 from dataclasses import dataclass
 from typing import Any, Iterable
 
 from dskity.modules.contracts import Module
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -22,7 +25,11 @@ class ModuleRegistry:
             try:
                 module_impl = importlib.import_module(modinfo.name + ".module")
             except ModuleNotFoundError:
-                continue
+                logger.debug(f"Module not found in package '{modinfo.name}'...")
+                module_impl = importlib.import_module(modinfo.name)
+                if not hasattr(module_impl, "get_module"):
+                    logger.debug(f"Module '{modinfo.name}' does not have a 'get_module' function...")
+                    continue
 
             get_module = getattr(module_impl, "get_module", None)
             if callable(get_module):

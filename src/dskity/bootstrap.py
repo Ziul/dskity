@@ -211,15 +211,17 @@ def bootstrap(app: FastAPI) -> None:
     discovered_by_name: dict[str, Any] = {}
     for package in modules_import_packages:
         try:
+            app.state.logger.debug(f"Attempting to discover modules in package '{package}'...")
             package_registry = ModuleRegistry.from_package(package)
         except ModuleNotFoundError:
+            app.state.logger.debug(f"Module not found in package '{package}'...")
             continue
 
         for module in package_registry.modules:
             discovered_by_name.setdefault(module.meta.name, module)
 
     if not discovered_by_name:
-        logger.debug(
+        app.state.logger.debug(
             "No modules found in modules_search_paths=%s.",
             modules_import_packages,
         )
@@ -233,9 +235,9 @@ def bootstrap(app: FastAPI) -> None:
 
     loaded_module_names = [m.meta.name for m in enabled_modules]
     if loaded_module_names:
-        logger.info("Modules loaded successfully in API: %s", loaded_module_names)
+        app.state.logger.info("Modules loaded successfully in API: %s", loaded_module_names)
     else:
-        logger.warning(
+        app.state.logger.warning(
             "No enabled modules were loaded into the API; modules_search_paths=%s",
             app.state.modules_import_packages,
         )
