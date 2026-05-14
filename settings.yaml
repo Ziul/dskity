@@ -6,8 +6,23 @@ modules_search_paths:
 common:
   mqtt:
     enabled: false
-    host: "localhost"
+    broker: "mqtts://localhost"
     port: 1883
+    client_id: "dskity"
+    # User (opcional)
+    username: null
+    # Password (opcional)
+    password: null
+    # Keep alive (seconds)
+    keepalive: 60
+    # Reconnect interval (seconds)
+    reconnect_interval_seconds: 10
+    # Protocol (3.1, 3.1.1, 5.0)
+    protocol: "5.0"
+    tls_secure: true
+    tls_version: "tlsv1_2"
+    # Adicional subscribe topics (opcional)
+    subscribe_topics: []
 
 modules:
   health:

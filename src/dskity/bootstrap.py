@@ -121,7 +121,9 @@ def bootstrap(app: FastAPI) -> None:
 
     # Make MQTT client_id unique by appending UUID
     if config and config.common and config.common.mqtt and config.common.mqtt.enabled:
-        config.common.mqtt.client_id = f"{config.common.mqtt.client_id}-{uuid4().hex[:8]}"
+        config.common.mqtt.client_id = (
+            f"{config.common.mqtt.client_id}-{uuid4().hex[:8]}"
+        )
         app.state.logger.debug(
             "Generated unique MQTT client_id: %s", config.common.mqtt.client_id
         )
@@ -147,7 +149,12 @@ def bootstrap(app: FastAPI) -> None:
     # Initialize MQTT client singleton (optional, based on config)
     async def _initialize_mqtt():
         """Initialize MQTT client based on configuration."""
-        if config and config.common and config.common.mqtt and config.common.mqtt.enabled:
+        if (
+            config
+            and config.common
+            and config.common.mqtt
+            and config.common.mqtt.enabled
+        ):
             try:
                 logger.debug("MQTT enabled in config; initializing MQTT client...")
                 mqtt_client = await get_mqtt_client(config.common.mqtt)
@@ -246,7 +253,9 @@ def bootstrap(app: FastAPI) -> None:
     discovered_by_name: dict[str, Any] = {}
     for package in modules_import_packages:
         try:
-            app.state.logger.debug(f"Attempting to discover modules in package '{package}'...")
+            app.state.logger.debug(
+                f"Attempting to discover modules in package '{package}'..."
+            )
             package_registry = ModuleRegistry.from_package(package)
         except ModuleNotFoundError:
             app.state.logger.debug(f"Module not found in package '{package}'...")
@@ -270,7 +279,9 @@ def bootstrap(app: FastAPI) -> None:
 
     loaded_module_names = [m.meta.name for m in enabled_modules]
     if loaded_module_names:
-        app.state.logger.info("Modules loaded successfully in API: %s", loaded_module_names)
+        app.state.logger.info(
+            "Modules loaded successfully in API: %s", loaded_module_names
+        )
     else:
         app.state.logger.warning(
             "No enabled modules were loaded into the API; modules_search_paths=%s",
@@ -293,7 +304,7 @@ def bootstrap(app: FastAPI) -> None:
 
     # Setup combined lifespan: MQTT initialization + Registry heartbeat (if enabled)
     registry_enabled = getattr(app.state, "registry_store", None) is not None
-    
+
     if registry_enabled:
         app.include_router(registry_router)
         app.add_middleware(RegistryAdvertiseMiddleware)
@@ -307,9 +318,11 @@ def bootstrap(app: FastAPI) -> None:
         3. Clean up on shutdown
         """
         # Initialize MQTT first
-        logger.info("Starting application lifespan: initializing MQTT and registry heartbeat...")
+        logger.info(
+            "Starting application lifespan: initializing MQTT and registry heartbeat..."
+        )
         await _initialize_mqtt()
-        
+
         try:
             # Start registry heartbeat if enabled
             if registry_enabled:
@@ -320,7 +333,7 @@ def bootstrap(app: FastAPI) -> None:
                         interval_seconds=inner_app.state.registry_heartbeat_interval_seconds,
                     ),
                 )
-            
+
             try:
                 yield
             finally:

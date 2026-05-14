@@ -34,7 +34,9 @@ class ModuleRegistry:
                     logger.debug(f"Discovered module '{modinfo.name}'...")
                     discovered.append(get_module())
                 else:
-                    logger.debug(f"Module '{modinfo.name}' does not have a 'get_module' function to call...")
+                    logger.debug(
+                        f"Module '{modinfo.name}' does not have a 'get_module' function to call..."
+                    )
             except Exception as e:
                 logger.error(f"Error loading module '{modinfo.name}': {e}")
 

@@ -286,7 +286,9 @@ def load_config_from_yaml(
     return DSkitySettings.model_validate(result_dict)
 
 
-def _apply_env_vars_to_dict(target_dict: dict[str, Any], prefix: str = "dskity_") -> None:
+def _apply_env_vars_to_dict(
+    target_dict: dict[str, Any], prefix: str = "dskity_"
+) -> None:
     """Apply env vars with given prefix to the configuration dict (in-place).
 
     Format: {PREFIX}SECTION__SUBSECTION__KEY = value

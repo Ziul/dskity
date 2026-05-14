@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import ssl
 from typing import Callable
 from concurrent.futures import Future
 
 try:
     import paho.mqtt.client as mqtt
+
     HAS_PAHO = True
 except ImportError:
     HAS_PAHO = False
@@ -26,6 +28,60 @@ def _reason_code_value(reason_code) -> int | None:
     except (TypeError, ValueError):
         return None
 
+
+def _get_tls_version(tls_version_str: str) -> int:
+    """Convert TLS version string to ssl constant.
+
+    Args:
+        tls_version_str: TLS version string (e.g., "tlsv1", "tlsv1_1", "tlsv1_2", "tlsv1_3")
+
+    Returns:
+        ssl module constant for the TLS version
+    """
+    mapping = {
+        "tlsv1": ssl.PROTOCOL_TLSv1,
+        "tlsv1_1": ssl.PROTOCOL_TLSv1_1,
+        "tlsv1_2": ssl.PROTOCOL_TLSv1_2,
+        "tlsv1_3": ssl.PROTOCOL_TLS_CLIENT,  # TLS 1.3 uses PROTOCOL_TLS_CLIENT
+    }
+
+    normalized = tls_version_str.lower().strip()
+    version = mapping.get(normalized, ssl.PROTOCOL_TLSv1_2)
+
+    logger.debug("Using TLS version: %s → %s", tls_version_str, version)
+    return version
+
+
+def _get_protocol_version(protocol_str: str) -> int:
+    """Convert MQTT protocol version string to paho-mqtt constant.
+
+    Args:
+        protocol_str: Protocol version string (e.g., "3.1", "3.1.1", "5.0")
+
+    Returns:
+        mqtt.MQTTv* constant
+    """
+    if hasattr(mqtt, "MQTTv31"):
+        mapping = {
+            "3.1": mqtt.MQTTv31,
+            "3.1.1": mqtt.MQTTv311,
+            "5.0": mqtt.MQTTv5,
+        }
+    else:
+        # Fallback for older versions
+        mapping = {
+            "3.1": 3,
+            "3.1.1": 4,
+            "5.0": 5,
+        }
+
+    normalized = str(protocol_str).strip()
+    version = mapping.get(normalized, mapping.get("5.0", 5))
+
+    logger.debug("Using MQTT protocol version: %s → %s", protocol_str, version)
+    return version
+
+
 # Global singleton instance
 _mqtt_client_instance: MQTTClient | None = None
 _mqtt_client_lock = asyncio.Lock()
@@ -33,14 +89,14 @@ _mqtt_client_lock = asyncio.Lock()
 
 class MQTTClient:
     """MQTT client wrapper using paho-mqtt library.
-    
+
     Implements singleton pattern for connection management.
     Supports callbacks for message reception and connection state changes.
     """
 
     def __init__(self, config: MQTTSettings):
         """Initialize MQTT client.
-        
+
         Args:
             config: MQTTSettings with broker, port, credentials, etc.
         """
@@ -55,8 +111,7 @@ class MQTTClient:
 
         if not HAS_PAHO:
             raise ImportError(
-                "paho-mqtt is not installed. "
-                "Install it with: uv add paho-mqtt"
+                "paho-mqtt is not installed. Install it with: uv add paho-mqtt"
             )
 
     async def start(self) -> None:
@@ -80,7 +135,9 @@ class MQTTClient:
         try:
             await self.connect()
         except Exception as e:
-            logger.warning("Initial MQTT connect failed, will retry periodically: %s", e)
+            logger.warning(
+                "Initial MQTT connect failed, will retry periodically: %s", e
+            )
 
         if self._reconnect_task is None or self._reconnect_task.done():
             self._reconnect_task = asyncio.create_task(self._reconnect_loop())
@@ -103,7 +160,7 @@ class MQTTClient:
 
     async def connect(self) -> None:
         """Establish connection to MQTT broker.
-        
+
         Raises:
             RuntimeError: If connection fails or MQTT is disabled.
         """
@@ -131,10 +188,12 @@ class MQTTClient:
                     except Exception:
                         pass
 
-                # Create client instance
+                # Create client instance with protocol version
+                protocol_version = _get_protocol_version(self.config.protocol)
                 self.client = mqtt.Client(
                     callback_api_version=mqtt.CallbackAPIVersion.VERSION2,
                     client_id=self.config.client_id,
+                    protocol=protocol_version,
                 )
 
                 # Set callbacks
@@ -144,7 +203,30 @@ class MQTTClient:
 
                 # Set credentials if provided
                 if self.config.username and self.config.password:
-                    self.client.username_pw_set(self.config.username, self.config.password)
+                    self.client.username_pw_set(
+                        self.config.username, self.config.password
+                    )
+
+                # Configure TLS/SSL if enabled
+                if self.config.tls_secure:
+                    tls_version = _get_tls_version(self.config.tls_version)
+                    try:
+                        self.client.tls_set(
+                            ca_certs=None,  # Use system default CA certs
+                            certfile=None,
+                            keyfile=None,
+                            cert_reqs=ssl.CERT_REQUIRED,
+                            tls_version=tls_version,
+                            ciphers=None,
+                        )
+                        # Disable hostname verification for self-signed certs (optional)
+                        self.client.tls_insecure_set(False)
+                        logger.debug(
+                            "TLS enabled for MQTT (version=%s)", self.config.tls_version
+                        )
+                    except Exception as e:
+                        logger.warning("Failed to configure TLS: %s", e)
+                        raise
 
                 # Connect to broker
                 # Extract hostname from broker URL (mqtt://host or mqtt+tls://host)
@@ -157,11 +239,13 @@ class MQTTClient:
                 # Remove path, if provided in URL (e.g. mqtt://host/path)
                 broker_host = broker_host.split("/", maxsplit=1)[0]
 
-                logger.debug(
-                    "Connecting to MQTT broker at %s:%d (client_id=%s)",
+                logger.info(
+                    "Connecting to MQTT broker at %s:%d (client_id=%s, protocol=%s, tls=%s)",
                     broker_host,
                     self.config.port,
                     self.config.client_id,
+                    self.config.protocol,
+                    self.config.tls_secure,
                 )
 
                 self.client.connect(
@@ -209,7 +293,7 @@ class MQTTClient:
 
     async def publish(self, topic: str, payload: str | bytes, qos: int = 0) -> None:
         """Publish message to MQTT topic.
-        
+
         Args:
             topic: MQTT topic
             payload: Message payload (string or bytes)
@@ -230,7 +314,7 @@ class MQTTClient:
 
     async def subscribe(self, topic: str, qos: int = 0) -> None:
         """Subscribe to MQTT topic.
-        
+
         Args:
             topic: MQTT topic (supports wildcards like topic/+/subtopic)
             qos: Quality of Service (0, 1, or 2)
@@ -250,7 +334,7 @@ class MQTTClient:
 
     def add_message_handler(self, topic: str, handler: Callable) -> None:
         """Register a callback for messages on a specific topic.
-        
+
         Args:
             topic: MQTT topic pattern
             handler: Async callable(topic, payload, properties) or sync callable(topic, payload)
@@ -322,14 +406,20 @@ class MQTTClient:
             reason_code = args[0]
 
         if _reason_code_value(reason_code) not in (0, None):
-            logger.warning("Unexpected MQTT disconnection with result code %s", reason_code)
+            logger.warning(
+                "Unexpected MQTT disconnection with result code %s", reason_code
+            )
         else:
             logger.debug("MQTT client disconnected")
 
     def _on_message(self, client, userdata, msg):
         """Callback for when message is received."""
         topic = msg.topic
-        payload = msg.payload.decode("utf-8") if isinstance(msg.payload, bytes) else msg.payload
+        payload = (
+            msg.payload.decode("utf-8")
+            if isinstance(msg.payload, bytes)
+            else msg.payload
+        )
 
         logger.debug("Received MQTT message on topic %s", topic)
 
@@ -379,15 +469,15 @@ class MQTTClient:
 
 def _topic_matches(topic: str, pattern: str) -> bool:
     """Check if topic matches MQTT pattern with wildcards.
-    
+
     Supports:
     - `+`: Matches exactly one level
     - `#`: Matches remaining levels (only at end)
-    
+
     Args:
         topic: Actual MQTT topic (e.g., "sensor/temperature/room1")
         pattern: Pattern with wildcards (e.g., "sensor/+/room1", "sensor/#")
-    
+
     Returns:
         True if topic matches pattern
     """
@@ -412,13 +502,13 @@ def _topic_matches(topic: str, pattern: str) -> bool:
 
 async def get_mqtt_client(config: MQTTSettings) -> MQTTClient:
     """Get or create MQTT client singleton.
-    
+
     This function implements the singleton pattern, ensuring only one
     MQTT client instance exists per application lifetime.
-    
+
     Args:
         config: MQTT configuration
-    
+
     Returns:
         MQTTClient singleton instance
     """

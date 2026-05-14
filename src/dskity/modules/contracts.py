@@ -32,14 +32,16 @@ class TransportClients:
         if self.http and hasattr(self.http.state, "logger"):
             return self.http.state.logger
         import logging
+
         return logging.getLogger(__name__)
-    
+
     def get_logger(self, module_name: str) -> Any:
         """Get a logger for a specific module, namespaced under the main logger."""
         base_logger = self.logger
         if base_logger:
             return base_logger.getChild(module_name)
         import logging
+
         return logging.getLogger(module_name)
 
 

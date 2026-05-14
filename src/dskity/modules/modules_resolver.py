@@ -87,6 +87,7 @@ class ModulesResolver:
         logger = getattr(self.app.state, "logger", None)
         if not logger:
             import logging
+
             logger = logging.getLogger(__name__)
         store = getattr(self.app.state, "registry_store", None)
         if store is not None:
@@ -103,7 +104,9 @@ class ModulesResolver:
                 if isinstance(base_url, str) and base_url:
                     urls.append(_join_url(base_url, str(route or "")))
             if urls:
-                logger.debug(f"Found URLs for service '{service}' in registry store: {urls}")
+                logger.debug(
+                    f"Found URLs for service '{service}' in registry store: {urls}"
+                )
                 return urls
 
         # Fallback (config): allow defining fixed URLs per module when discovery is not shared.
@@ -113,7 +116,9 @@ class ModulesResolver:
         if urls:
             logger.debug(f"Found URLs for service '{service}' in static config: {urls}")
             return urls
-        logger.debug(f"No URLs found for service '{service}' in registry store or static config, trying internal base URL fallback")
+        logger.debug(
+            f"No URLs found for service '{service}' in registry store or static config, trying internal base URL fallback"
+        )
 
         # Fallback: use internal base URL with current host and port. This allows modules to call each other using the internal network even if they are not registered in the registry store or configured with static URLs.
         host, port = get_current_host_port()
