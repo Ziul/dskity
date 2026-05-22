@@ -16,11 +16,13 @@ from dskity.bootstrap import (
 from dskity.app import create_app
 
 
-def test_bootstrap_exposes_root_metrics_and_request_id() -> None:
+def test_bootstrap_exposes_root_metrics_and_request_id_and_service_name() -> None:
     app = create_app()
     client = TestClient(app)
 
     r_root = client.get("/")
+    assert "service" in r_root.json()
+    assert r_root.json()["service"] == app.state.config.name == app.title
     assert r_root.status_code == 200
     assert "enabled_modules" in r_root.json()
     assert "X-Request-Id" in r_root.headers

@@ -118,6 +118,7 @@ def bootstrap(app: FastAPI) -> None:
 
     # Store config in app.state for later access
     app.state.config = config
+    app.title = config.name if config and config.name else app.title
 
     # Make MQTT client_id unique by appending UUID
     if config and config.common and config.common.mqtt and config.common.mqtt.enabled:
@@ -349,7 +350,7 @@ def bootstrap(app: FastAPI) -> None:
     @app.get("/")
     def root() -> dict:
         enabled = [m.meta.name for m in enabled_modules]
-        return {"service": "dskity", "enabled_modules": enabled}
+        return {"service": config.name, "enabled_modules": enabled}
 
     # Correlation id per request (X-Request-Id).
     # Must be the last middleware added to be the outermost and cover

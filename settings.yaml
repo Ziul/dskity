@@ -1,3 +1,5 @@
+name: DSKity
+
 modules_search_paths:
   - dskity.modules
   - modules

@@ -208,6 +208,7 @@ class DSkitySettings(BaseSettings):
     kv: KvSettings = Field(default_factory=KvSettings)
     modules: ModulesSettings = Field(default_factory=ModulesSettings)
     modules_search_paths: list[str] = Field(default_factory=lambda: ["modules"])
+    name: str | None = "Dskity"  # Optional name for env var prefixing
 
     @field_validator("modules_search_paths", mode="before")
     @classmethod
