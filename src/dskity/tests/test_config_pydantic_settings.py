@@ -6,8 +6,24 @@ import os
 from pathlib import Path
 
 import yaml
+from pydantic import BaseModel
 
 from dskity.config.loader import load_config
+from dskity.config.settings import ModuleSettings, hydrate_module_additional_settings
+
+
+class ExtraSettings(BaseModel):
+    greeting_prefix: str = "hello"
+    max_retries: int = 3
+
+
+class FakeModuleWithSettings:
+    def additional_settings_model(self):
+        return ExtraSettings
+
+
+class FakeModuleWithoutSettings:
+    pass
 
 
 def test_load_config_basic() -> None:
@@ -162,3 +178,39 @@ def test_load_config_case_insensitive() -> None:
     finally:
         del os.environ["DSKITY_COMMON__INTERNAL_BASE_URL"]
         del os.environ["dskity_kv__store"]
+
+
+def test_module_additional_settings_are_hydrated_to_model() -> None:
+    module_settings = ModuleSettings.model_validate(
+        {
+            "enabled": True,
+            "additional_settings": {
+                "greeting_prefix": "hi",
+            },
+        }
+    )
+
+    hydrated = hydrate_module_additional_settings(
+        FakeModuleWithSettings(), module_settings
+    )
+
+    assert isinstance(hydrated.additional_settings, ExtraSettings)
+    assert hydrated.additional_settings.greeting_prefix == "hi"
+    assert hydrated.additional_settings.max_retries == 3
+
+
+def test_module_additional_settings_stay_raw_without_schema() -> None:
+    module_settings = ModuleSettings.model_validate(
+        {
+            "enabled": True,
+            "additional_settings": {
+                "foo": "bar",
+            },
+        }
+    )
+
+    hydrated = hydrate_module_additional_settings(
+        FakeModuleWithoutSettings(), module_settings
+    )
+
+    assert hydrated.additional_settings == {"foo": "bar"}

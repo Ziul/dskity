@@ -11,6 +11,7 @@ from uuid import uuid4
 from fastapi import FastAPI
 
 from dskity.config.loader import load_config
+from dskity.config.settings import hydrate_module_additional_settings
 from dskity.kvstore.backends import backend_from_config, generate_node_id
 from dskity.metrics import install_metrics
 from dskity.modules.registry import ModuleRegistry
@@ -301,6 +302,8 @@ def bootstrap(app: FastAPI) -> None:
     clients = TransportClients(http=app, grpc=grpc_client, mqtt=mqtt_client)
 
     for module in enabled_modules:
+        module_cfg = config.modules.ensure(module.meta.name)
+        hydrate_module_additional_settings(module, module_cfg)
         module.register(clients=clients, config=config)
 
     # Setup combined lifespan: MQTT initialization + Registry heartbeat (if enabled)

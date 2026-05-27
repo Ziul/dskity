@@ -107,6 +107,7 @@ class ModuleSettings(BaseModel):
     url: str | None = None
     headers: dict[str, str] | None = None
     database: ModuleDatabaseSettings | None = None
+    additional_settings: Any = None
 
     model_config = {"extra": "allow"}
 
@@ -157,6 +158,15 @@ class ModulesSettings(BaseModel):
             module.__name__ = name
         return module
 
+    def ensure(self, name: str) -> ModuleSettings:
+        extra = getattr(self, "__pydantic_extra__", {}) or {}
+        module = self._as_module(name, extra.get(name))
+        if not isinstance(module, ModuleSettings):
+            module = ModuleSettings.model_validate({"enabled": True})
+            module.__name__ = name
+        extra[name] = module
+        return module
+
     def __getattr__(self, name: str):
         # Allow accessing extra modules as attributes and convert dicts to ModuleSettings
         extra = getattr(self, "__pydantic_extra__", {}) or {}
@@ -174,6 +184,41 @@ class ModulesSettings(BaseModel):
         val = self._as_module(name, extra[name])
         extra[name] = val
         return val
+
+
+def hydrate_module_additional_settings(module: Any, module_settings: ModuleSettings) -> ModuleSettings:
+    """Bind module-specific additional settings using the module's optional schema.
+
+    If the module exposes ``additional_settings_model()``, the field is converted to
+    that model and default values are materialized when the field is missing.
+    Legacy modules that do not expose the hook keep the raw value unchanged.
+    """
+
+    model_factory = getattr(module, "additional_settings_model", None)
+    if not callable(model_factory):
+        return module_settings
+
+    model_type = model_factory()
+    if model_type is None:
+        return module_settings
+
+    current = module_settings.additional_settings
+    if current is None:
+        module_settings.additional_settings = model_type()
+        return module_settings
+
+    if isinstance(current, model_type):
+        return module_settings
+
+    if isinstance(current, BaseModel):
+        current = current.model_dump()
+
+    if isinstance(current, dict):
+        module_settings.additional_settings = model_type.model_validate(current)
+        return module_settings
+
+    module_settings.additional_settings = model_type.model_validate(current)
+    return module_settings
 
 
 class DSkitySettings(BaseSettings):

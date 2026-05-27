@@ -4,6 +4,7 @@ import sys
 from pathlib import Path
 
 from fastapi.testclient import TestClient
+from pydantic import BaseModel, Field
 
 from dskity.config.settings import DSkitySettings
 from dskity.modules.registry import ModuleRegistry
@@ -14,6 +15,29 @@ from dskity.bootstrap import (
     _resolve_modules_search_paths,
 )
 from dskity.app import create_app
+
+
+class HealthAdditionalSettings(BaseModel):
+    enabled_checks: list[str] = Field(default_factory=lambda: ["live", "ready"])
+
+
+class FakeModuleWithAdditionalSettings:
+    def __init__(self, name: str, base_path: str) -> None:
+        self.meta = type("Meta", (), {"name": name, "base_path": base_path})()
+
+    def additional_settings_model(self):
+        return HealthAdditionalSettings
+
+    def register(self, clients, config):  # noqa: ANN001
+        return None
+
+
+class FakeModuleWithoutAdditionalSettings:
+    def __init__(self, name: str, base_path: str) -> None:
+        self.meta = type("Meta", (), {"name": name, "base_path": base_path})()
+
+    def register(self, clients, config):  # noqa: ANN001
+        return None
 
 
 def test_bootstrap_exposes_root_metrics_and_request_id_and_service_name() -> None:
@@ -131,6 +155,63 @@ def test_bootstrap_logs_loaded_modules(caplog, monkeypatch) -> None:
 
     assert hasattr(app.state, "enabled_modules")
     assert [m.name for m in app.state.enabled_modules] == ["health", "echo"]
+
+
+def test_bootstrap_hydrates_module_specific_additional_settings(monkeypatch) -> None:
+    fake_registry = ModuleRegistry(
+        modules=(FakeModuleWithAdditionalSettings("health", "/health"),)
+    )
+    monkeypatch.setattr(
+        bootstrap_mod.ModuleRegistry, "from_package", lambda _pkg: fake_registry
+    )
+    monkeypatch.setattr(
+        bootstrap_mod,
+        "load_config",
+        lambda override_path=None: DSkitySettings.model_validate(
+            {
+                "modules": {
+                    "health": {
+                        "enabled": True,
+                        "additional_settings": {"enabled_checks": ["ping"]},
+                    }
+                }
+            }
+        ),
+    )
+
+    app = create_app()
+
+    health_cfg = app.state.config.modules.health
+    assert isinstance(health_cfg.additional_settings, HealthAdditionalSettings)
+    assert health_cfg.additional_settings.enabled_checks == ["ping"]
+
+
+def test_bootstrap_keeps_legacy_additional_settings_raw(monkeypatch) -> None:
+    fake_registry = ModuleRegistry(
+        modules=(FakeModuleWithoutAdditionalSettings("health", "/health"),)
+    )
+    monkeypatch.setattr(
+        bootstrap_mod.ModuleRegistry, "from_package", lambda _pkg: fake_registry
+    )
+    monkeypatch.setattr(
+        bootstrap_mod,
+        "load_config",
+        lambda override_path=None: DSkitySettings.model_validate(
+            {
+                "modules": {
+                    "health": {
+                        "enabled": True,
+                        "additional_settings": {"feature_flag": True},
+                    }
+                }
+            }
+        ),
+    )
+
+    app = create_app()
+
+    health_cfg = app.state.config.modules.health
+    assert health_cfg.additional_settings == {"feature_flag": True}
 
 
 def test_core_config_json_omits_none_values() -> None:

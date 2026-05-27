@@ -4,13 +4,21 @@ from dataclasses import dataclass
 
 import httpx
 from fastapi import APIRouter, Request, HTTPException
+from pydantic import BaseModel, Field
 
 from dskity import Module, ModuleMeta, DSkitySettings, TransportClients
+
+
+class HealthAdditionalSettings(BaseModel):
+    enabled_checks: list[str] = Field(default_factory=lambda: ["live", "ready"])
 
 
 @dataclass(frozen=True)
 class HealthModule(Module):
     meta: ModuleMeta = ModuleMeta(name="health", base_path="/health")
+
+    def additional_settings_model(self):
+        return HealthAdditionalSettings
 
     def register(self, clients: TransportClients, config: DSkitySettings) -> None:
         router = APIRouter(prefix=self.meta.base_path, tags=[self.meta.name])

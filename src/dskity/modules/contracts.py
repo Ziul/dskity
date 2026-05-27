@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Any, Protocol
 
 from fastapi import FastAPI
+from pydantic import BaseModel
 from dskity import DSkitySettings
 
 
@@ -48,6 +49,9 @@ class TransportClients:
 class Module(Protocol):
     meta: ModuleMeta
 
+    def additional_settings_model(self) -> type[BaseModel] | None: ...
+
     def register(
         self, clients: TransportClients, config: DSkitySettings | dict
     ) -> None: ...
+
