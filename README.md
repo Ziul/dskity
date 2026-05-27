@@ -3,10 +3,8 @@
 [![Build](https://github.com/Ziul/dskity/actions/workflows/build.yaml/badge.svg)](https://github.com/Ziul/dskity/actions)
 [![Release](https://img.shields.io/github/v/release/Ziul/dskity)](https://github.com/Ziul/dskity/releases)
 [![PyPI](https://img.shields.io/pypi/v/dskity.svg)](https://pypi.org/project/dskity/)
-[![Python Versions](https://img.shields.io/pypi/pyversions/dskity.svg)](https://pypi.org/project/dskity/)
 [![License](https://img.shields.io/github/license/Ziul/dskity.svg)](https://github.com/Ziul/dskity/blob/main/LICENSE)
 [![Issues](https://img.shields.io/github/issues/Ziul/dskity)](https://github.com/Ziul/dskity/issues)
-[![Codecov](https://img.shields.io/codecov/c/gh/Ziul/dskity)](https://codecov.io/gh/Ziul/dskity)
 
 A small, modular Python framework for building services with pluggable transports and modules.
 
@@ -38,8 +36,7 @@ Prerequisites:
 Install project dependencies (development):
 
 ```bash
-python -m pip install --upgrade pip
-pip install -e .[dev]
+pip install dskity
 ```
 
 ## Configuration
@@ -104,7 +101,7 @@ By default, those are the default settings.
 
 Run the FastAPI app (when present) or import `dskity.bootstrap` to construct an application instance.
 
-Example (development):
+Example:
 
 ```bash
 dskity
@@ -115,12 +112,40 @@ dskity
 Run the test suite with pytest:
 
 ```bash
-pytest -q
+uv run pytest -q
 ```
+
+Tip: this workspace provides `uv` helper that installs and runs tests with the correct environment; prefer `uv run pytest` locally.
 
 ## Module API
 
 Modules must implement a `register(self, clients: TransportClients, config: DSkitySettings | dict) -> None` method. Use `clients.http` to access the FastAPI app (if available), `clients.grpc` for the gRPC client, and `clients.mqtt` for MQTT.
+
+Optional per-module configuration schema
+
+Modules can optionally expose a small hook that returns a `pydantic.BaseModel` class describing module-specific additional settings. If present, DSkity will hydrate the module's `additional_settings` field (available under `config.modules.<name>.additional_settings`) into an instance of that model before calling `register()`.
+
+Example module hook (minimal):
+
+```python
+from pydantic import BaseModel
+
+class HealthAdditionalSettings(BaseModel):
+  enabled_checks: list[str] = ["live", "ready"]
+
+class HealthModule:
+  meta = ModuleMeta(name="health", base_path="/health")
+
+  def additional_settings_model(self):
+    # Return the BaseModel type used to validate/hydrate additional_settings
+    return HealthAdditionalSettings
+
+  def register(self, clients, config):
+    # config.modules.health.additional_settings is an instance of HealthAdditionalSettings
+    pass
+```
+
+This makes it simple for modules to get typed configuration specific to themselves while keeping backwards compatibility for modules that do not declare a schema.
 
 ## Contributing
 
