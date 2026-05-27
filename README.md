@@ -1,6 +1,6 @@
 # DSkity
 
-[![Build](https://github.com/Ziul/dskity/actions/workflows/build.yaml/badge.svg)](https://github.com/Ziul/dskity/actions)
+[![Build](https://github.com/Ziul/dskity/actions/workflows/flow.yaml/badge.svg)](https://github.com/Ziul/dskity/actions/workflows/flow.yaml)
 [![Release](https://img.shields.io/github/v/release/Ziul/dskity)](https://github.com/Ziul/dskity/releases)
 [![PyPI](https://img.shields.io/pypi/v/dskity.svg)](https://pypi.org/project/dskity/)
 [![License](https://img.shields.io/github/license/Ziul/dskity.svg)](https://github.com/Ziul/dskity/blob/main/LICENSE)
