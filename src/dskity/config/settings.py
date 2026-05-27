@@ -15,6 +15,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from dotenv import load_dotenv
 from pydantic import BaseModel, Field, field_validator
 from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -302,6 +303,7 @@ def _apply_env_vars_to_dict(
 
     Case-insensitive for the key.
     """
+    load_dotenv()
     import os
 
     prefix_lower = prefix.lower()
