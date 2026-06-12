@@ -102,7 +102,7 @@ def validate_config(
         from dskity.config.loader import resolve_config_path, _read_config_file
 
         resolved = resolve_config_path(config_path)
-        raw_config = _read_config_file(resolved, optional=False)
+        _ = _read_config_file(resolved, optional=False)
         report.add(
             "config.parse",
             CheckStatus.OK,

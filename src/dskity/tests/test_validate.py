@@ -3,13 +3,9 @@
 from __future__ import annotations
 
 import json
-import os
-import tempfile
 import textwrap
 from pathlib import Path
-from unittest.mock import patch
 
-import pytest
 
 from dskity.validate import (
     CheckStatus,
@@ -212,7 +208,6 @@ def test_validate_config_non_strict_no_kv_check(tmp_path) -> None:
 # ── CLI: dskity validate ──────────────────────────────────────────────────────
 
 def test_cli_validate_command_exit_zero(tmp_path) -> None:
-    import sys
     from dskity.cli import main
 
     cfg = tmp_path / "settings.yaml"
@@ -235,7 +230,7 @@ def test_cli_validate_json_output(tmp_path, capsys) -> None:
     cfg = tmp_path / "settings.yaml"
     _write_minimal_config(cfg)
 
-    code = main(["validate", "--config", str(cfg), "--json"])
+    main(["validate", "--config", str(cfg), "--json"])
     captured = capsys.readouterr()
     data = json.loads(captured.out)
     assert "results" in data

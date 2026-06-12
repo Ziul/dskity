@@ -6,7 +6,6 @@ from dataclasses import dataclass
 
 from fastapi import FastAPI
 
-from dskity.network import get_local_ip
 from dskity.registry.service_registry import ServiceRegistry
 
 

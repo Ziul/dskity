@@ -12,7 +12,6 @@ import textwrap
 from contextlib import contextmanager
 from typing import Any
 
-import yaml
 from fastapi import FastAPI
 from fastapi.testclient import TestClient as _TestClient
 

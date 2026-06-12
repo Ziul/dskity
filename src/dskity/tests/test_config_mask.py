@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
 
 from dskity.config.mask import MASK, mask_secrets
 

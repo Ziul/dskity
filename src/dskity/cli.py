@@ -359,7 +359,6 @@ def _cmd_init(args: argparse.Namespace) -> int:
 def _cmd_list(args: argparse.Namespace) -> int:
     """List discovered modules and their status."""
     import json as _json
-    import sys
 
     from dskity.config.loader import load_config, resolve_config_path
     from dskity.modules.registry import ModuleRegistry
