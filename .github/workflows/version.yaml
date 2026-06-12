@@ -48,7 +48,6 @@ jobs:
           useConfigFile: true
           configFilePath: .github/GitVersion.yaml
       - id: output
-        if: github.event_name != 'release'
         env:
           GITHUB_CONTEXT: ${{ toJson(github) }}
         run: |
