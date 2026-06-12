@@ -9,10 +9,16 @@ from typing import Any
 from uuid import uuid4
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from dskity.config.loader import load_config
 from dskity.config.settings import hydrate_module_additional_settings
+from dskity.errors import install_error_handlers
+from dskity.health import install_health_checks
 from dskity.kvstore.backends import backend_from_config, generate_node_id
+from dskity.security_headers import SecurityHeadersMiddleware
+from dskity.transport.http_client import HttpClientManager
+from dskity.events import EventBus
 from dskity.metrics import install_metrics
 from dskity.modules.registry import ModuleRegistry
 from dskity.modules.contracts import TransportClients
@@ -22,11 +28,60 @@ from dskity.modules.modules_resolver import ModulesResolver
 from dskity.request_id import install_request_id
 from dskity.registry.api import router as registry_router
 from dskity.registry.heartbeat import HeartbeatConfig, start_heartbeat, stop_heartbeat
-from dskity.registry.middleware import EnabledModuleInfo, RegistryAdvertiseMiddleware
+from dskity.registry.middleware import EnabledModuleInfo, RegistryAdvertiseASGIMiddleware
 from dskity.registry.store import RegistryStore
 
 
 logger = logging.getLogger(__name__)
+
+
+def _topological_sort(modules: list) -> list:
+    """Sort modules by depends_on, raising RuntimeError on cycles.
+
+    Modules without depends_on or with unknown dependencies maintain
+    their relative discovery order.
+    """
+    by_name = {m.meta.name: m for m in modules}
+    enabled_names = set(by_name)
+
+    # Warn about missing dependencies (not enabled / not discovered).
+    for mod in modules:
+        for dep in getattr(mod.meta, "depends_on", ()):
+            if dep not in enabled_names:
+                logger.warning(
+                    "Module '%s' depends on '%s' which is not enabled; skipping dependency.",
+                    mod.meta.name,
+                    dep,
+                )
+
+    # Kahn's algorithm for topological ordering.
+    in_degree: dict[str, int] = {m.meta.name: 0 for m in modules}
+    adjacency: dict[str, list[str]] = {m.meta.name: [] for m in modules}
+
+    for mod in modules:
+        for dep in getattr(mod.meta, "depends_on", ()):
+            if dep in enabled_names:
+                adjacency[dep].append(mod.meta.name)
+                in_degree[mod.meta.name] += 1
+
+    queue = [name for name, deg in in_degree.items() if deg == 0]
+    sorted_names: list[str] = []
+
+    while queue:
+        name = queue.pop(0)
+        sorted_names.append(name)
+        for dependent in adjacency[name]:
+            in_degree[dependent] -= 1
+            if in_degree[dependent] == 0:
+                queue.append(dependent)
+
+    if len(sorted_names) != len(modules):
+        cycle_nodes = {n for n, d in in_degree.items() if d > 0}
+        raise RuntimeError(
+            f"Circular dependency detected among modules: {sorted(cycle_nodes)}"
+        )
+
+    return [by_name[name] for name in sorted_names]
 
 
 def _resolve_app_init_dir(config_path: str | None) -> Path:
@@ -144,6 +199,36 @@ def bootstrap(app: FastAPI) -> None:
     # Prometheus metrics (HTTP) + /metrics endpoint.
     install_metrics(app)
 
+    # RFC 7807 global error handlers.
+    install_error_handlers(app)
+
+    # Built-in health checks (/health/live, /health/ready).
+    health_cfg = config.common.health if config and config.common else None
+    if health_cfg is None or health_cfg.enabled:
+        path_prefix = health_cfg.path_prefix if health_cfg else "/health"
+        install_health_checks(app, path_prefix=path_prefix)
+
+    # CORS middleware (optional, based on config).
+    if config and config.common and config.common.cors and config.common.cors.enabled:
+        cors = config.common.cors
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=cors.allow_origins,
+            allow_methods=cors.allow_methods,
+            allow_headers=cors.allow_headers,
+            allow_credentials=cors.allow_credentials,
+            max_age=cors.max_age,
+        )
+        logger.debug("CORS middleware enabled with origins: %s", cors.allow_origins)
+
+    # Security headers middleware (optional, based on config).
+    if config and config.common and config.common.security_headers.enabled:
+        app.add_middleware(
+            SecurityHeadersMiddleware,
+            settings=config.common.security_headers,
+        )
+        logger.debug("Security headers middleware enabled")
+
     # Module resolver: allows getting the URL of a module by name.
     # E.g.: request.app.modules.get("echo") -> URL (random among instances)
     app.modules = ModulesResolver(app)  # type: ignore[attr-defined]
@@ -194,17 +279,19 @@ def bootstrap(app: FastAPI) -> None:
     if config.common.advertise_url:
         advertise_url = config.common.advertise_url
     else:
-        # s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        # s.connect(("8.8.8.8", 80))
-        # ip = s.getsockname()[0]
-        # port = app.state.listen_port if hasattr(app.state, "listen_port") else 8000
-        # advertise_url = f"http://{ip}:{port}".rstrip("/")
         advertise_url = None
     app.state.advertise_url = (
         advertise_url.rstrip("/")
         if isinstance(advertise_url, str) and advertise_url
         else None
     )
+
+    # Cache local IP once during bootstrap to avoid per-request socket creation.
+    if not app.state.advertise_url:
+        from dskity.network import get_local_ip
+        app.state.local_ip = get_local_ip()
+    else:
+        app.state.local_ip = None
 
     # Access registry config via Pydantic model attributes
     if config and config.common.registry:
@@ -279,6 +366,9 @@ def bootstrap(app: FastAPI) -> None:
     else:
         enabled_modules = list(registry.enabled_modules(config))
 
+    # Topological sort: respect depends_on declarations.
+    enabled_modules = _topological_sort(enabled_modules)
+
     loaded_module_names = [m.meta.name for m in enabled_modules]
     if loaded_module_names:
         app.state.logger.info(
@@ -306,26 +396,75 @@ def bootstrap(app: FastAPI) -> None:
         hydrate_module_additional_settings(module, module_cfg)
         module.register(clients=clients, config=config)
 
+    # Store enabled module instances for lifecycle hooks.
+    app.state.enabled_modules_instances = enabled_modules
+
     # Setup combined lifespan: MQTT initialization + Registry heartbeat (if enabled)
     registry_enabled = getattr(app.state, "registry_store", None) is not None
 
     if registry_enabled:
         app.include_router(registry_router)
-        app.add_middleware(RegistryAdvertiseMiddleware)
+        app.add_middleware(RegistryAdvertiseASGIMiddleware, interval_seconds=10.0)
 
     @asynccontextmanager
     async def _combined_lifespan(inner_app: FastAPI):
         """
         Combined lifespan handler:
         1. Initialize MQTT client (if enabled) - will auto-reconnect if disconnected
-        2. Start registry heartbeat (if registry enabled)
-        3. Clean up on shutdown
+        2. Call on_startup() for modules that define it (in registration order)
+        3. Start registry heartbeat (if registry enabled)
+        4. Clean up on shutdown (reverse order for on_shutdown)
         """
-        # Initialize MQTT first
+        import time as _time
+
         logger.info(
             "Starting application lifespan: initializing MQTT and registry heartbeat..."
         )
         await _initialize_mqtt()
+
+        # Start shared HTTP client
+        _http_client_settings = (
+            config.common.http_client if config and config.common else None
+        )
+        _http_client_manager = HttpClientManager(
+            timeout=_http_client_settings.timeout_seconds if _http_client_settings else 10.0,
+            max_connections=_http_client_settings.max_connections if _http_client_settings else 100,
+            max_keepalive_connections=_http_client_settings.max_keepalive_connections if _http_client_settings else 20,
+        )
+        await _http_client_manager.start()
+        inner_app.state.http_client = _http_client_manager
+
+        # Initialize in-process event bus
+        _event_bus = EventBus()
+        inner_app.state.event_bus = _event_bus
+
+        # Rebuild clients with potentially initialized MQTT client and http client manager
+        _mqtt = getattr(inner_app.state, "mqtt_client", None)
+        _startup_clients = TransportClients(
+            http=inner_app,
+            grpc=grpc_client,
+            mqtt=_mqtt,
+            http_client=_http_client_manager,
+            events=_event_bus,
+        )
+
+        # Call on_startup hooks in registration order
+        for _mod in enabled_modules:
+            if hasattr(_mod, "on_startup"):
+                _t0 = _time.monotonic()
+                try:
+                    await _mod.on_startup(_startup_clients)
+                    logger.info(
+                        "on_startup(%s) completed in %.3fs",
+                        _mod.meta.name,
+                        _time.monotonic() - _t0,
+                    )
+                except Exception as _exc:
+                    logger.exception(
+                        "on_startup(%s) raised an error (continuing): %s",
+                        _mod.meta.name,
+                        _exc,
+                    )
 
         try:
             # Start registry heartbeat if enabled
@@ -345,8 +484,29 @@ def bootstrap(app: FastAPI) -> None:
                 if registry_enabled:
                     await stop_heartbeat(inner_app)
         finally:
+            # Call on_shutdown hooks in reverse registration order
+            for _mod in reversed(enabled_modules):
+                if hasattr(_mod, "on_shutdown"):
+                    _t0 = _time.monotonic()
+                    try:
+                        await _mod.on_shutdown(_startup_clients)
+                        logger.info(
+                            "on_shutdown(%s) completed in %.3fs",
+                            _mod.meta.name,
+                            _time.monotonic() - _t0,
+                        )
+                    except Exception as _exc:
+                        logger.exception(
+                            "on_shutdown(%s) raised an error (continuing): %s",
+                            _mod.meta.name,
+                            _exc,
+                        )
+
             # Shutdown MQTT last
             await _shutdown_mqtt()
+
+            # Shutdown shared HTTP client
+            await _http_client_manager.stop()
 
     app.router.lifespan_context = _combined_lifespan
 

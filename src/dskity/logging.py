@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 import logging.config
 import os
@@ -15,31 +16,61 @@ class RequestIdFilter(logging.Filter):
         return True
 
 
+class JsonFormatter(logging.Formatter):
+    """Structured JSON log formatter."""
+
+    def format(self, record: logging.LogRecord) -> str:
+        return json.dumps(
+            {
+                "timestamp": self.formatTime(record, datefmt="%Y-%m-%dT%H:%M:%S.%fZ"),
+                "level": record.levelname,
+                "logger": record.name,
+                "message": record.getMessage(),
+                "request_id": getattr(record, "request_id", None),
+                "module": record.module,
+                "function": record.funcName,
+                "line": record.lineno,
+            },
+            default=str,
+        )
+
+
 def _level_from_env(default: str = "INFO") -> str:
-    return (os.getenv("DSKITY_LOG_LEVEL") or os.getenv("LOG_LEVEL") or default).upper()
+    return (
+        os.getenv("DSKITY_COMMON__LOGGING__LEVEL")
+        or os.getenv("LOG_LEVEL")
+        or default
+    ).upper()
 
 
-def build_logging_config(*, level: str | None = None) -> dict[str, Any]:
+def _format_from_env(default: str = "text") -> str:
+    return (os.getenv("DSKITY_COMMON__LOGGING__FORMAT") or default).lower()
+
+
+def build_logging_config(*, level: str | None = None, log_format: str | None = None) -> dict[str, Any]:
     lvl = (level or _level_from_env()).upper()
+    fmt = (log_format or _format_from_env()).lower()
+
+    use_json = fmt == "json"
 
     default_fmt = (
         "%(asctime)s %(levelname)s %(name)s request_id=%(request_id)s - %(message)s"
     )
-    # For uvicorn.access, using %(message)s is more robust: Uvicorn already formats
-    # the access line and not every LogRecord will have client_addr/request_line/status_code.
     access_fmt = (
         "%(asctime)s %(levelname)s %(name)s request_id=%(request_id)s - %(message)s"
     )
 
-    return {
-        "version": 1,
-        "disable_existing_loggers": False,
-        "filters": {
-            "request_id": {"()": "dskity.logging.RequestIdFilter"},
-        },
-        "formatters": {
-            # Important: uvicorn.access does not populate client_addr/request_line/status_code
-            # in a standard formatter; it requires Uvicorn's AccessFormatter.
+    if use_json:
+        formatters: dict[str, Any] = {
+            "default": {
+                "()": "dskity.logging.JsonFormatter",
+            },
+            "access": {
+                "()": "dskity.logging.JsonFormatter",
+            },
+        }
+    else:
+        formatters = {
             "default": {
                 "()": "uvicorn.logging.DefaultFormatter",
                 "fmt": default_fmt,
@@ -50,7 +81,15 @@ def build_logging_config(*, level: str | None = None) -> dict[str, Any]:
                 "fmt": access_fmt,
                 "use_colors": None,
             },
+        }
+
+    return {
+        "version": 1,
+        "disable_existing_loggers": False,
+        "filters": {
+            "request_id": {"()": "dskity.logging.RequestIdFilter"},
         },
+        "formatters": formatters,
         "handlers": {
             "console": {
                 "class": "logging.StreamHandler",
@@ -93,7 +132,7 @@ def build_logging_config(*, level: str | None = None) -> dict[str, Any]:
     }
 
 
-def configure_logging(*, level: str | None = None) -> dict[str, Any]:
-    cfg = build_logging_config(level=level)
+def configure_logging(*, level: str | None = None, log_format: str | None = None) -> dict[str, Any]:
+    cfg = build_logging_config(level=level, log_format=log_format)
     logging.config.dictConfig(cfg)
     return cfg

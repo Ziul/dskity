@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import socket
@@ -13,8 +14,10 @@ from dskity.config.settings import DSkitySettings
 
 try:
     import redis  # type: ignore
+    import redis.asyncio as redis_async  # type: ignore
 except Exception:  # pragma: no cover
     redis = None  # type: ignore
+    redis_async = None  # type: ignore
 
 try:
     import consul  # type: ignore
@@ -337,6 +340,174 @@ class ConsulKVBackend(KVBackend):
                 continue
             results.append(k)
         return sorted(set(results))
+
+
+class AsyncKVBackend(Protocol):
+    """Async KV backend protocol for non-blocking use from async FastAPI handlers."""
+
+    async def get(self, key: str) -> Any: ...
+
+    async def put(self, key: str, value: Any, ttl_seconds: int | None = None) -> None: ...
+
+    async def delete(self, key: str) -> None: ...
+
+    async def keys(self, prefix: str = "") -> list[str]: ...
+
+
+@dataclass
+class AsyncInMemoryKVBackend:
+    """Async wrapper around InMemoryKVBackend (sync ops are fast enough)."""
+
+    _sync: InMemoryKVBackend
+
+    def __init__(self, *, default_ttl_seconds: int | None = None) -> None:
+        self._sync = InMemoryKVBackend(default_ttl_seconds=default_ttl_seconds)
+
+    async def get(self, key: str) -> Any:
+        return self._sync.get(key)
+
+    async def put(self, key: str, value: Any, ttl_seconds: int | None = None) -> None:
+        self._sync.put(key, value, ttl_seconds=ttl_seconds)
+
+    async def delete(self, key: str) -> None:
+        self._sync.delete(key)
+
+    async def keys(self, prefix: str = "") -> list[str]:
+        return self._sync.keys(prefix=prefix)
+
+
+@dataclass
+class AsyncRedisKVBackend:
+    """Async Redis KV backend using ``redis.asyncio``."""
+
+    client: Any
+    key_prefix: str = ""
+    default_ttl_seconds: int | None = None
+
+    @staticmethod
+    def _normalize_prefix(value: str) -> str:
+        prefix = (value or "").strip()
+        if not prefix:
+            return ""
+        if not prefix.endswith(":"):
+            prefix += ":"
+        return prefix
+
+    @classmethod
+    def from_config(cls, config: dict) -> "AsyncRedisKVBackend":
+        if redis_async is None:
+            raise RuntimeError(
+                "Redis async dependency not installed. Install with: pip install redis>=4.2"
+            )
+
+        kv_cfg = _kv_cfg(config)
+        redis_cfg = (kv_cfg or {}).get("redis", {}) if isinstance(kv_cfg, dict) else {}
+
+        url = (
+            os.getenv("DSKITY_REDIS_URL")
+            or os.getenv("REDIS_URL")
+            or (redis_cfg.get("url") if isinstance(redis_cfg, dict) else None)
+            or "redis://127.0.0.1:6379/0"
+        )
+
+        username = os.getenv("DSKITY_REDIS_USERNAME") or (
+            redis_cfg.get("username") if isinstance(redis_cfg, dict) else None
+        )
+        password = os.getenv("DSKITY_REDIS_PASSWORD") or (
+            redis_cfg.get("password") if isinstance(redis_cfg, dict) else None
+        )
+        key_prefix = cls._normalize_prefix(
+            str(redis_cfg.get("key_prefix") or "")
+            if isinstance(redis_cfg, dict)
+            else ""
+        )
+
+        default_ttl_seconds = None
+        if isinstance(kv_cfg, dict) and kv_cfg.get("default_ttl_seconds") is not None:
+            default_ttl_seconds = int(kv_cfg.get("default_ttl_seconds"))
+
+        kwargs: dict[str, Any] = {"decode_responses": True}
+        if username:
+            kwargs["username"] = str(username)
+        if password:
+            kwargs["password"] = str(password)
+
+        client = redis_async.Redis.from_url(str(url), **kwargs)
+        return cls(
+            client=client,
+            key_prefix=key_prefix,
+            default_ttl_seconds=default_ttl_seconds,
+        )
+
+    def _effective_ttl(self, ttl_seconds: int | None) -> int | None:
+        ttl = ttl_seconds if ttl_seconds is not None else self.default_ttl_seconds
+        if ttl is None:
+            return None
+        ttl_int = int(ttl)
+        if ttl_int <= 0:
+            return None
+        return ttl_int
+
+    def _k(self, key: str) -> str:
+        return f"{self.key_prefix}{key}" if self.key_prefix else key
+
+    async def get(self, key: str) -> Any:
+        raw = await self.client.get(self._k(key))
+        if raw is None:
+            return None
+        try:
+            return json.loads(raw)
+        except Exception:
+            return raw
+
+    async def put(self, key: str, value: Any, ttl_seconds: int | None = None) -> None:
+        try:
+            payload = json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+        except TypeError as e:
+            raise TypeError("Value not JSON-serializable for storage in Redis") from e
+        ttl = self._effective_ttl(ttl_seconds)
+        if ttl is None:
+            await self.client.set(self._k(key), payload)
+        else:
+            await self.client.set(self._k(key), payload, ex=int(ttl))
+
+    async def delete(self, key: str) -> None:
+        await self.client.delete(self._k(key))
+
+    async def keys(self, prefix: str = "") -> list[str]:
+        full_prefix = f"{self.key_prefix}{prefix}" if self.key_prefix else prefix
+        match = f"{full_prefix}*" if full_prefix else "*"
+
+        results: list[str] = []
+        async for k in self.client.scan_iter(match=match, count=1000):
+            if self.key_prefix and k.startswith(self.key_prefix):
+                k = k[len(self.key_prefix):]
+            if prefix and not k.startswith(prefix):
+                continue
+            results.append(k)
+        return sorted(set(results))
+
+
+@dataclass
+class AsyncConsulKVBackend:
+    """Async wrapper around ConsulKVBackend using asyncio.to_thread."""
+
+    _sync: ConsulKVBackend
+
+    def __init__(self, sync_backend: ConsulKVBackend) -> None:
+        self._sync = sync_backend
+
+    async def get(self, key: str) -> Any:
+        return await asyncio.to_thread(self._sync.get, key)
+
+    async def put(self, key: str, value: Any, ttl_seconds: int | None = None) -> None:
+        await asyncio.to_thread(self._sync.put, key, value, ttl_seconds)
+
+    async def delete(self, key: str) -> None:
+        await asyncio.to_thread(self._sync.delete, key)
+
+    async def keys(self, prefix: str = "") -> list[str]:
+        return await asyncio.to_thread(self._sync.keys, prefix)
 
 
 def generate_node_id() -> str:

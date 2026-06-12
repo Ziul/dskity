@@ -12,6 +12,7 @@ from dskity import DSkitySettings
 class ModuleMeta:
     name: str
     base_path: str
+    depends_on: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -21,11 +22,15 @@ class TransportClients:
     - `http`: the `FastAPI` instance (HTTP server) or `None`.
     - `grpc`: gRPC client/server wrapper (untyped to avoid direct dependency).
     - `mqtt`: singleton MQTT client (implementation-defined) or `None`.
+    - `http_client`: shared async HTTP client manager or `None`.
+    - `events`: in-process event bus or `None`.
     """
 
     http: FastAPI | None = None
     grpc: Any | None = None
     mqtt: Any | None = None
+    http_client: Any | None = None  # HttpClientManager instance
+    events: Any | None = None  # EventBus instance
 
     @property
     def logger(self) -> Any:
@@ -54,4 +59,8 @@ class Module(Protocol):
     def register(
         self, clients: TransportClients, config: DSkitySettings | dict
     ) -> None: ...
+
+    async def on_startup(self, clients: TransportClients) -> None: ...
+
+    async def on_shutdown(self, clients: TransportClients) -> None: ...
 

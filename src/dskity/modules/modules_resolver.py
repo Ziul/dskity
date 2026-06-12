@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import asyncio
 import random
+import warnings
 from dataclasses import dataclass
 from typing import Any
 
@@ -177,3 +179,61 @@ class ModulesResolver:
                     }
 
         return {}
+
+    def _resolver_settings(self) -> Any:
+        """Return ResolverSettings from app config, or defaults."""
+        cfg = getattr(self.app.state, "config", None)
+        if cfg and hasattr(cfg, "common") and hasattr(cfg.common, "resolver"):
+            return cfg.common.resolver
+        # Return a simple namespace with defaults.
+        from types import SimpleNamespace
+        return SimpleNamespace(timeout_seconds=5.0, max_retries=3, retry_delay_seconds=0.5)
+
+    async def aurls(self, service: str) -> list[str]:
+        """Async version of urls() with timeout and retry logic."""
+        settings = self._resolver_settings()
+        timeout = settings.timeout_seconds
+        max_retries = settings.max_retries
+        retry_delay = settings.retry_delay_seconds
+
+        import logging as _logging
+        _logger = getattr(self.app.state, "logger", _logging.getLogger(__name__))
+
+        store = getattr(self.app.state, "registry_store", None)
+        if store is not None:
+            for attempt in range(max_retries):
+                try:
+                    urls: list[str] = await asyncio.wait_for(
+                        asyncio.to_thread(self.urls, service),
+                        timeout=timeout,
+                    )
+                    return urls
+                except asyncio.TimeoutError:
+                    _logger.warning(
+                        "Resolver timeout for service '%s' (attempt %d/%d)",
+                        service, attempt + 1, max_retries,
+                    )
+                    if attempt < max_retries - 1:
+                        await asyncio.sleep(retry_delay * (2 ** attempt))
+                except Exception as exc:
+                    _logger.warning(
+                        "Resolver error for service '%s' (attempt %d/%d): %s",
+                        service, attempt + 1, max_retries, exc,
+                    )
+                    if attempt < max_retries - 1:
+                        await asyncio.sleep(retry_delay * (2 ** attempt))
+
+            _logger.error(
+                "All %d resolver attempts failed for service '%s'; using fallback.",
+                max_retries, service,
+            )
+
+        # Fallback: synchronous static resolution (no I/O, safe)
+        return self.urls(service)
+
+    async def aget(self, service: str, default: str | None = None) -> str | None:
+        """Async version of get() with timeout and retry."""
+        urls = await self.aurls(service)
+        if not urls:
+            return default
+        return random.choice(urls)

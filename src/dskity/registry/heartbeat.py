@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import asyncio
-import socket
 import time
 from dataclasses import dataclass
 
 from fastapi import FastAPI
 
+from dskity.network import get_local_ip
 from dskity.registry.service_registry import ServiceRegistry
 
 
@@ -14,21 +14,6 @@ from dskity.registry.service_registry import ServiceRegistry
 class HeartbeatConfig:
     ttl_seconds: int
     interval_seconds: int
-
-
-def _get_advertise_base_url() -> str | None:
-    """
-    Determine the base IP via socket discovery.
-    DOES NOT use a port fallback - the middleware should use request.url.port
-    """
-    try:
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.connect(("8.8.8.8", 80))
-        ip = s.getsockname()[0]
-        s.close()
-        return ip
-    except Exception:
-        return None
 
 
 def start_heartbeat(app: FastAPI, *, cfg: HeartbeatConfig) -> None:
@@ -67,6 +52,26 @@ def start_heartbeat(app: FastAPI, *, cfg: HeartbeatConfig) -> None:
 
 
 async def stop_heartbeat(app: FastAPI) -> None:
+    """Stop the heartbeat task and deregister all modules from the registry."""
+    # Deregister all modules before stopping the heartbeat task
+    store = getattr(app.state, "registry_store", None)
+    instance_id = getattr(app.state, "instance_id", None)
+    enabled = getattr(app.state, "enabled_modules", None)
+
+    if store is not None and instance_id and enabled:
+        reg = ServiceRegistry(store=store)
+        for mod in enabled:
+            try:
+                reg.deregister_instance(service=mod.name, instance_id=instance_id)
+            except Exception as exc:
+                import logging as _logging
+                _logging.getLogger(__name__).warning(
+                    "Failed to deregister service=%s instance=%s: %s",
+                    mod.name,
+                    instance_id,
+                    exc,
+                )
+
     task: asyncio.Task | None = getattr(app.state, "_registry_heartbeat_task", None)
     if task is None:
         return

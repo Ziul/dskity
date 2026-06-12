@@ -3,13 +3,35 @@ from __future__ import annotations
 import datetime as dt
 import html
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse
 
 from dskity.config.loader import load_config
+from dskity.config.mask import mask_secrets
 from dskity.registry.service_registry import ServiceRegistry
 
-router = APIRouter(prefix="/_core", tags=["core-registry"])
+
+def verify_admin_access(request: Request) -> None:
+    """FastAPI dependency: check admin token and enabled flag if configured."""
+    config = getattr(request.app.state, "config", None)
+    if config is None:
+        return
+
+    admin = config.common.admin
+    if not admin.enabled:
+        raise HTTPException(status_code=404, detail="Admin endpoints disabled")
+
+    if admin.token:
+        provided = request.headers.get("x-admin-token")
+        if provided != admin.token:
+            raise HTTPException(status_code=403, detail="Invalid admin token")
+
+
+router = APIRouter(
+    prefix="/_core",
+    tags=["core-registry"],
+    dependencies=[Depends(verify_admin_access)],
+)
 
 
 def _registry(request: Request) -> ServiceRegistry | None:
@@ -122,16 +144,39 @@ def list_instances_json(service: str, request: Request) -> dict:
     }
 
 
+def _secrets_warning_banner(admin: object) -> str:
+    """Return an HTML warning banner if secrets masking is disabled."""
+    if getattr(admin, "mask_secrets", True):
+        return ""
+    return (
+        "<div style='margin-top: 8px; padding: 12px; background: #fff3cd;"
+        " border: 1px solid #ffc107; border-radius: 4px; color: #856404;"
+        " font-family: ui-sans-serif, system-ui;'>"
+        "&#9888; <strong>Warning:</strong> Secrets are visible."
+        " Ensure admin.mask_secrets=true in production."
+        "</div>"
+    )
+
+
 @router.get("/config", response_class=HTMLResponse)
 def config_html(request: Request) -> HTMLResponse:
     """Display current application configuration (including credentials)."""
-    # Try to get config from app.state, otherwise reload
     config = getattr(request.app.state, "config", None)
     if config is None:
         config = load_config()
 
-    # Convert to a dict recursively
+    admin = config.common.admin
+    if not admin.show_config:
+        return HTMLResponse(
+            "<html><body><h1>Configuration</h1>"
+            "<p>Config endpoint is disabled. Set <code>common.admin.show_config: true</code> to enable.</p>"
+            "</body></html>",
+            status_code=404,
+        )
+
     config_dict = config.model_dump(exclude_none=True)
+    if admin.mask_secrets:
+        config_dict = mask_secrets(config_dict)
 
     def render_value(v) -> str:
         """Render a value with highlighting for credentials."""
@@ -142,13 +187,8 @@ def config_html(request: Request) -> HTMLResponse:
         if isinstance(v, (int, float)):
             return f"<span style='color: #00a;'>{v}</span>"
         if isinstance(v, str):
-            # Highlight potential credentials
-            if (
-                any(word in v.lower() for word in ["password", "token", "secret"])
-                or "://" in v
-                and "@" in v
-            ):
-                return f"<span style='color: #d60; background: #ffc;'>{html.escape(v)}</span>"
+            if v == "***":
+                return "<span style='color: #999; font-style: italic;'>***</span>"
             return html.escape(v)
         return html.escape(str(v))
 
@@ -180,31 +220,27 @@ def config_html(request: Request) -> HTMLResponse:
 
     page = f"""<!doctype html>
 <html lang='en'>
-	<head>
-		<meta charset='utf-8' />
-		<meta name='viewport' content='width=device-width, initial-scale=1' />
+\t<head>
+\t\t<meta charset='utf-8' />
+\t\t<meta name='viewport' content='width=device-width, initial-scale=1' />
         <title>Application Configuration</title>
-	</head>
-	<body style='font-family: ui-monospace, Menlo, Monaco, Consolas, monospace; margin: 24px; font-size: 13px;'>
-		<h1 style='font-family: ui-sans-serif, system-ui, -apple-system; margin: 0 0 8px 0;'>
+\t</head>
+\t<body style='font-family: ui-monospace, Menlo, Monaco, Consolas, monospace; margin: 24px; font-size: 13px;'>
+\t\t<h1 style='font-family: ui-sans-serif, system-ui, -apple-system; margin: 0 0 8px 0;'>
                         Application Configuration
                 </h1>
         <div style='margin: 0 0 16px 0; color: #666; font-family: ui-sans-serif, system-ui;'>
             Loaded at: {html.escape(now.isoformat())} (UTC)
-		</div>
-		<div style='padding: 16px; background: #f8f8f8; border: 1px solid #ddd; border-radius: 4px; line-height: 1.6;'>
-			{body}
-		</div>
+\t\t</div>
+\t\t<div style='padding: 16px; background: #f8f8f8; border: 1px solid #ddd; border-radius: 4px; line-height: 1.6;'>
+\t\t\t{body}
+\t\t</div>
         <div style='margin-top: 16px; color: #666; font-family: ui-sans-serif, system-ui;'>
             API JSON: <a href='/_core/config.json'>/_core/config.json</a> | 
             <a href='/_core/services'>← Back to Services</a>
-		</div>
-        <div style='margin-top: 8px; padding: 12px; 
-                            background: #fff3cd; border: 1px solid #ffc107; 
-                            border-radius: 4px; color: #856404; font-family: ui-sans-serif, system-ui;'>
-            ⚠️ <strong>Warning:</strong> This page displays credentials and sensitive information. Do not expose in production.
-        </div>
-	</body>
+\t\t</div>
+        {_secrets_warning_banner(admin)}
+\t</body>
 </html>"""
 
     return HTMLResponse(page, status_code=200)
@@ -217,4 +253,11 @@ def config_json(request: Request) -> dict:
     if config is None:
         config = load_config()
 
-    return config.model_dump(exclude_none=True)
+    admin = config.common.admin
+    if not admin.show_config:
+        raise HTTPException(status_code=404, detail="Config endpoint is disabled")
+
+    data = config.model_dump(exclude_none=True)
+    if admin.mask_secrets:
+        data = mask_secrets(data)
+    return data

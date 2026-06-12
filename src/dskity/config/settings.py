@@ -8,12 +8,14 @@ Examples of environment variables:
 - DSKITY_KV__STORE="redis"
 - DSKITY_KV__REDIS__URL="redis://localhost:6379"
 - DSKITY_MODULES__PERSON__DATABASE__URL="postgresql://user:pass@localhost/db"
+- DSKITY_COMMON__CORS__ENABLED=true
+- DSKITY_COMMON__LOGGING__FORMAT=json
 """
 
 from __future__ import annotations
 
 import json
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
 from pydantic import model_validator
@@ -45,6 +47,91 @@ class MQTTSettings(BaseModel):
     subscribe_topics: list[str] = Field(default_factory=list)
 
 
+class CorsSettings(BaseModel):
+    """CORS middleware settings (common.cors.*)"""
+
+    enabled: bool = False
+    allow_origins: list[str] = Field(default_factory=lambda: ["*"])
+    allow_methods: list[str] = Field(default_factory=lambda: ["*"])
+    allow_headers: list[str] = Field(default_factory=lambda: ["*"])
+    allow_credentials: bool = False
+    max_age: int = 600
+
+
+class LoggingSettings(BaseModel):
+    """Logging settings (common.logging.*)"""
+
+    format: Literal["text", "json"] = "text"
+    level: str = "INFO"
+
+
+class HealthSettings(BaseModel):
+    """Health check settings (common.health.*)"""
+
+    enabled: bool = True
+    path_prefix: str = "/health"
+
+
+class ResolverSettings(BaseModel):
+    """Service resolver settings (common.resolver.*)"""
+
+    timeout_seconds: float = 5.0
+    max_retries: int = 3
+    retry_delay_seconds: float = 0.5
+
+
+class AdminSettings(BaseModel):
+    """Settings for administrative/debug endpoints (common.admin.*)"""
+
+    enabled: bool = Field(default=True, description="Enable /_core/* admin endpoints")
+    show_config: bool = Field(
+        default=False,
+        description="Enable /_core/config endpoint. Disabled by default for safety.",
+    )
+    mask_secrets: bool = Field(
+        default=True,
+        description="Mask sensitive values in config output.",
+    )
+    token: str | None = Field(
+        default=None,
+        description="If set, /_core/* endpoints require X-Admin-Token header.",
+    )
+
+    @model_validator(mode="after")
+    def _production_defaults(self) -> AdminSettings:
+        """Warn if config endpoint is explicitly exposed in production."""
+        import logging as _logging
+        import os
+        if os.getenv("DSKITY_ENV", "").lower() == "production" and self.show_config:
+            _logging.getLogger(__name__).warning(
+                "/_core/config is enabled in production. "
+                "Ensure admin.token is set to protect sensitive data."
+            )
+        return self
+
+
+class SecurityHeadersSettings(BaseModel):
+    """Security headers middleware settings (common.security_headers.*)"""
+
+    enabled: bool = False
+    x_content_type_options: str = "nosniff"
+    x_frame_options: str = "DENY"
+    strict_transport_security: str | None = None
+    content_security_policy: str | None = None
+    referrer_policy: str = "strict-origin-when-cross-origin"
+    x_xss_protection: str = "1; mode=block"
+    permissions_policy: str | None = None
+    custom_headers: dict[str, str] = Field(default_factory=dict)
+
+
+class HttpClientSettings(BaseModel):
+    """Shared async HTTP client settings (common.http_client.*)"""
+
+    timeout_seconds: float = 10.0
+    max_connections: int = 100
+    max_keepalive_connections: int = 20
+
+
 class CommonSettings(BaseModel):
     """Common settings (common.*)"""
 
@@ -52,6 +139,13 @@ class CommonSettings(BaseModel):
     advertise_url: str = "http://127.0.0.1:8000"
     registry: RegistrySettings = Field(default_factory=RegistrySettings)
     mqtt: MQTTSettings = Field(default_factory=MQTTSettings)
+    cors: CorsSettings = Field(default_factory=CorsSettings)
+    logging: LoggingSettings = Field(default_factory=LoggingSettings)
+    health: HealthSettings = Field(default_factory=HealthSettings)
+    resolver: ResolverSettings = Field(default_factory=ResolverSettings)
+    admin: AdminSettings = Field(default_factory=AdminSettings)
+    security_headers: SecurityHeadersSettings = Field(default_factory=SecurityHeadersSettings)
+    http_client: HttpClientSettings = Field(default_factory=HttpClientSettings)
 
 
 class RedisSettings(BaseModel):
@@ -254,6 +348,13 @@ class DSkitySettings(BaseSettings):
     modules: ModulesSettings = Field(default_factory=ModulesSettings)
     modules_search_paths: list[str] = Field(default_factory=lambda: ["modules"])
     name: str | None = "Dskity"  # Optional name for env var prefixing
+    reload: bool | None = Field(
+        default=None,
+        description=(
+            "Enable auto-reload. None = smart default (True unless DSKITY_ENV=production). "
+            "Overridden by DSKITY_RELOAD env var or --reload / --no-reload CLI flag."
+        ),
+    )
 
     @field_validator("modules_search_paths", mode="before")
     @classmethod

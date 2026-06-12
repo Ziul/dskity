@@ -86,6 +86,16 @@ class ServiceRegistry:
         instances.sort(key=lambda x: int(x.get("updated_at", 0)), reverse=True)
         return instances
 
+    def deregister_instance(self, *, service: str, instance_id: str) -> None:
+        """Remove a specific instance from the registry immediately."""
+        key = _svc_key(service, instance_id)
+        self.store.delete(key)
+        logger.info(
+            "Deregistered service instance: service=%s, instance_id=%s",
+            service,
+            instance_id,
+        )
+
     def prune_expired(self, *, service: str, now: int | None = None) -> int:
         now_ts = int(now if now is not None else time.time())
         removed = 0

@@ -1,54 +1,92 @@
 from __future__ import annotations
 
+import logging
+import time
 from dataclasses import dataclass
-from typing import Callable
+from typing import Any
 
-import socket
-from fastapi import Request
-from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.responses import Response
-
+from dskity.network import get_local_ip
 from dskity.registry.service_registry import ServiceRegistry
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
 class EnabledModuleInfo:
+    """Lightweight descriptor for a registered module instance."""
+
     name: str
     base_path: str
 
 
-class RegistryAdvertiseMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request: Request, call_next: Callable) -> Response:
-        response = await call_next(request)
+class RegistryAdvertiseASGIMiddleware:
+    """Pure ASGI middleware that advertises this instance in the service registry.
 
-        store = getattr(request.app.state, "registry_store", None)
-        enabled = getattr(request.app.state, "enabled_modules", None)
-        instance_id = getattr(request.app.state, "instance_id", None)
-        logger = getattr(request.app.state, "logger", None)
-        if store is None or enabled is None or not instance_id:
-            return response
+    Throttled to avoid re-registering on every request (at most once per
+    ``interval_seconds`` seconds). Handles WebSocket and non-HTTP scopes
+    transparently, without buffering response bodies.
+    """
 
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.connect(("8.8.8.8", 80))
-        ip = s.getsockname()[0]
-        port = request.url.port or 80
-        base_url = f"http://{ip}:{port}".rstrip("/")
-        if logger:
-            logger.debug(
-                f"Determined base_url as {base_url} for service registry advertisement with id {request.state.request_id}."
-            )
+    def __init__(self, app: Any, *, interval_seconds: float = 10.0) -> None:
+        self.app = app
+        self._interval = interval_seconds
+        self._last_advertise: float = 0
 
-        registry = ServiceRegistry(store=store)
+    async def __call__(self, scope: dict, receive: Any, send: Any) -> None:
+        # Pass through all non-HTTP scopes unchanged (e.g. WebSocket, lifespan)
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
 
-        ttl_seconds = int(getattr(request.app.state, "registry_ttl_seconds", 60))
+        # Serve the request first — never delay the response
+        await self.app(scope, receive, send)
 
-        for mod in enabled:
-            registry.register_instance(
-                service=mod.name,
-                instance_id=instance_id,
-                base_url=base_url,
-                route=mod.base_path,
-                ttl_seconds=ttl_seconds,
-            )
+        # Throttle: only advertise at most once per interval
+        now = time.monotonic()
+        if now - self._last_advertise < self._interval:
+            return
+        self._last_advertise = now
 
-        return response
+        # Best-effort registration — never fail the request
+        try:
+            app_obj = scope.get("app")
+            if app_obj is None:
+                return
+
+            state = getattr(app_obj, "state", None)
+            if state is None:
+                return
+
+            store = getattr(state, "registry_store", None)
+            enabled = getattr(state, "enabled_modules", None)
+            instance_id = getattr(state, "instance_id", None)
+            if store is None or enabled is None or not instance_id:
+                return
+
+            advertise_url = getattr(state, "advertise_url", None)
+            if not advertise_url:
+                local_ip = getattr(state, "local_ip", None)
+                if not local_ip:
+                    local_ip = get_local_ip()
+                    state.local_ip = local_ip
+                server = scope.get("server")
+                port = server[1] if server else 8000
+                advertise_url = f"http://{local_ip}:{port}"
+
+            registry = ServiceRegistry(store=store)
+            ttl_seconds = int(getattr(state, "registry_ttl_seconds", 60))
+
+            for mod in enabled:
+                registry.register_instance(
+                    service=mod.name,
+                    instance_id=instance_id,
+                    base_url=advertise_url,
+                    route=mod.base_path,
+                    ttl_seconds=ttl_seconds,
+                )
+        except Exception:
+            logger.debug("Registry advertise failed (best-effort)", exc_info=True)
+
+
+# Backward-compatible alias (kept for any existing code referencing the old name)
+RegistryAdvertiseMiddleware = RegistryAdvertiseASGIMiddleware

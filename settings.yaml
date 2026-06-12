@@ -1,11 +1,20 @@
 name: DSKity
 
+# Auto-reload: null = smart default (enabled outside production)
+# Override via --reload / --no-reload or DSKITY_RELOAD env var.
+reload: null
+
 modules_search_paths:
   - dskity.modules
   - modules
   - examples.modules
 
 common:
+  admin:
+    enabled: true
+    show_config: true
+  logging:
+    level: "ERROR"
   mqtt:
     enabled: false
     broker: "mqtts://localhost"
