@@ -414,10 +414,15 @@ def bootstrap(app: FastAPI) -> None:
     ]
 
     # Create an object grouping transport clients available to modules.
+    # Ensure an in-process EventBus exists early so modules can use it during register().
+    if not hasattr(app.state, "event_bus") or getattr(app.state, "event_bus") is None:
+        app.state.event_bus = EventBus()
+    _event_bus_early = getattr(app.state, "event_bus")
+
     # Note: mqtt_client will be initialized in lifespan, so use getattr for safety
     mqtt_client = getattr(app.state, "mqtt_client", None)
     grpc_client = GRPCClient()
-    clients = TransportClients(http=app, grpc=grpc_client, mqtt=mqtt_client)
+    clients = TransportClients(http=app, grpc=grpc_client, mqtt=mqtt_client, events=_event_bus_early)
 
     for module in enabled_modules:
         module_cfg = config.modules.ensure(module.meta.name)
@@ -462,9 +467,11 @@ def bootstrap(app: FastAPI) -> None:
         await _http_client_manager.start()
         inner_app.state.http_client = _http_client_manager
 
-        # Initialize in-process event bus
-        _event_bus = EventBus()
-        inner_app.state.event_bus = _event_bus
+        # Initialize or reuse in-process event bus
+        _event_bus = getattr(inner_app.state, "event_bus", None)
+        if _event_bus is None:
+            _event_bus = EventBus()
+            inner_app.state.event_bus = _event_bus
 
         # Rebuild clients with potentially initialized MQTT client and http client manager
         _mqtt = getattr(inner_app.state, "mqtt_client", None)

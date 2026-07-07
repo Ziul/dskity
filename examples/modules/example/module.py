@@ -79,8 +79,8 @@ class ExamplesModule(Module):
         log = clients.get_logger(self.meta.name)
 
         if clients.events is not None:
-            clients.events.on("examples.factorial_requested", _on_factorial_requested)
-            log.info("examples: subscribed to 'examples.factorial_requested'")
+            clients.events.on("examples.factorial_computed", _on_factorial_requested)
+            log.info("examples: subscribed to 'examples.factorial_computed'")
             await clients.events.emit("examples.started", {"module": self.meta.name})
 
     async def on_shutdown(self, clients: TransportClients) -> None:
@@ -88,7 +88,7 @@ class ExamplesModule(Module):
         log = clients.get_logger(self.meta.name)
 
         if clients.events is not None:
-            clients.events.off("examples.factorial_requested", _on_factorial_requested)
+            clients.events.off("examples.factorial_computed", _on_factorial_requested)
             await clients.events.emit("examples.stopped", {"module": self.meta.name})
             log.info("examples: deregistered event handlers")
 
