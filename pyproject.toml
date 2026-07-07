@@ -31,6 +31,8 @@ dev = [
     "pytest>=9.0.3",
     "ruff>=0.15.12",
     "paho-mqtt>=2.1.0",
+    "graphifyy[all,mcp]>=0.9.6",
+    "ipdb>=0.13.13",
 ]
 
 [tool.setuptools]

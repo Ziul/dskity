@@ -4,6 +4,7 @@ import argparse
 import importlib
 import logging
 import os
+import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -169,13 +170,25 @@ def main(argv: list[str] | None = None) -> int:
 
     # If no sub-command was given, treat the entire argv as arguments to `run`.
     args, remaining = parser.parse_known_args(argv)
+
+    # Build token list from provided argv or sys.argv when argv is None.
+    tokens = list(argv) if argv is not None else sys.argv[1:]
+
     if args.command is None:
-        # Re-parse everything as a `run` command.
-        run_args = run_parser.parse_args(argv if argv is not None else [])
+        # No explicit subcommand: treat entire token list as run args.
+        run_tokens = tokens
+        run_args = run_parser.parse_args(run_tokens)
         return _cmd_run(run_args)
 
     if args.command == "run":
-        run_args = run_parser.parse_args(argv[1:] if argv is not None else [])
+        # Locate the 'run' token and parse the following tokens as run args.
+        try:
+            idx = tokens.index("run")
+            run_tokens = tokens[idx + 1 :]
+        except ValueError:
+            # Fallback: use remaining tokens (may be empty) or everything after first token.
+            run_tokens = remaining or tokens[1:]
+        run_args = run_parser.parse_args(run_tokens)
         return _cmd_run(run_args)
 
     if args.command == "init":

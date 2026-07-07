@@ -361,8 +361,36 @@ def bootstrap(app: FastAPI) -> None:
 
     registry = ModuleRegistry(modules=tuple(discovered_by_name.values()))
     if target_modules:
-        enabled_modules = [m for m in registry.modules if m.meta.name in target_modules]
-        app.state.target_modules = sorted(target_modules)
+        # Include dependencies of requested targets (transitive closure).
+        # Even if a dependency is disabled in settings, honor it when explicitly
+        # requested as part of a target dependency chain.
+        desired: set[str] = set(target_modules)
+        # Map for quick lookup
+        by_name = {m.meta.name: m for m in registry.modules}
+        # Expand closure
+        added = True
+        while added:
+            added = False
+            for name in list(desired):
+                mod = by_name.get(name)
+                if not mod:
+                    continue
+                for dep in getattr(mod.meta, "depends_on", ()):  # type: ignore[attr-defined]
+                    if dep and dep not in desired:
+                        desired.add(dep)
+                        added = True
+
+        # Warn about missing dependencies not discovered
+        for name in list(desired):
+            if name not in by_name:
+                logger.warning(
+                    "Requested module '%s' or its dependency was not discovered; skipping: %s",
+                    name,
+                    name,
+                )
+
+        enabled_modules = [m for m in registry.modules if m.meta.name in desired]
+        app.state.target_modules = sorted(desired)
     else:
         enabled_modules = list(registry.enabled_modules(config))
 
