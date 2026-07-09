@@ -1,19 +1,85 @@
 from __future__ import annotations
 
-import argparse
+from dataclasses import dataclass, replace
 import importlib
 import logging
 import os
-import sys
 from pathlib import Path
+from typing import Annotated
 
 from dotenv import load_dotenv
+from click.core import ParameterSource
+from click.exceptions import ClickException, Exit
+import typer
 import uvicorn
 
 from dskity.config.loader import resolve_config_path, _read_config_file
 from dskity.logging import configure_logging
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(slots=True)
+class RunOptions:
+    config_path: str | None = None
+    host: str = "0.0.0.0"
+    port: int = 8000
+    log_level: str = "INFO"
+    advertise_url: str | None = None
+    targets: list[str] | None = None
+    reload_dirs: list[str] | None = None
+    reload: bool | None = None
+
+
+app = typer.Typer(add_completion=False, invoke_without_command=True, help="Dskity CLI")
+
+ConfigPathOption = Annotated[
+    str | None,
+    typer.Option("--config", "-c", help="Path to a TOML or YAML config file."),
+]
+HostOption = Annotated[str, typer.Option("--host", "-H", help="Host interface to bind.")]
+PortOption = Annotated[int, typer.Option("--port", "-p", help="Port to listen on.")]
+LogLevelOption = Annotated[
+    str,
+    typer.Option("--log-level", "-l", help="Set log level of the application."),
+]
+AdvertiseUrlOption = Annotated[
+    str | None,
+    typer.Option(
+        "--advertise-url",
+        help="URL advertised in service discovery (if different from listen host/port).",
+    ),
+]
+TargetsOption = Annotated[
+    list[str] | None,
+    typer.Option(
+        "--target",
+        "-t",
+        help=(
+            "List of modules to enable (overrides YAML). "
+            "Accepts CSV (e.g. echo,health) and can be repeated (e.g. -t echo -t health)."
+        ),
+    ),
+]
+ReloadDirsOption = Annotated[
+    list[str] | None,
+    typer.Option(
+        "--reload-dir",
+        "-r",
+        help=(
+            "Directories (comma-separated or repeated) to watch for reload. "
+            "If omitted, auto-computed from modules_search_paths. "
+            "Can also be set via DSKITY_RELOAD_DIRS env var."
+        ),
+    ),
+]
+ReloadOption = Annotated[
+    bool | None,
+    typer.Option(
+        "--reload/--no-reload",
+        help="Enable or disable auto-reload (default: True unless DSKITY_ENV=production).",
+    ),
+]
 
 
 def _parse_targets(values: list[str] | None) -> list[str]:
@@ -108,178 +174,161 @@ def _compute_reload_dirs(config_path: str) -> list[str]:
     return dirs
 
 
+def _build_run_options(
+    config_path: str | None,
+    host: str,
+    port: int,
+    log_level: str,
+    advertise_url: str | None,
+    targets: list[str] | None,
+    reload_dirs: list[str] | None,
+    reload: bool | None,
+) -> RunOptions:
+    return RunOptions(
+        config_path=config_path,
+        host=host,
+        port=port,
+        log_level=log_level,
+        advertise_url=advertise_url,
+        targets=targets,
+        reload_dirs=reload_dirs,
+        reload=reload,
+    )
+
+
+def _merge_run_options(ctx: typer.Context, current: RunOptions) -> RunOptions:
+    base = ctx.obj if isinstance(ctx.obj, RunOptions) else None
+    if base is None:
+        return current
+
+    merged = replace(base)
+    sources = {
+        "config_path": current.config_path,
+        "host": current.host,
+        "port": current.port,
+        "log_level": current.log_level,
+        "advertise_url": current.advertise_url,
+        "targets": current.targets,
+        "reload_dirs": current.reload_dirs,
+        "reload": current.reload,
+    }
+
+    for field_name, value in sources.items():
+        if ctx.get_parameter_source(field_name) == ParameterSource.COMMANDLINE:
+            setattr(merged, field_name, value)
+
+    return merged
+
+
+@app.callback()
+def _root(
+    ctx: typer.Context,
+    config_path: ConfigPathOption = None,
+    host: HostOption = "0.0.0.0",
+    port: PortOption = 8000,
+    log_level: LogLevelOption = "INFO",
+    advertise_url: AdvertiseUrlOption = None,
+    targets: TargetsOption = None,
+    reload_dirs: ReloadDirsOption = None,
+    reload: ReloadOption = None,
+) -> int | None:
+    options = _build_run_options(
+        config_path,
+        host,
+        port,
+        log_level,
+        advertise_url,
+        targets,
+        reload_dirs,
+        reload,
+    )
+    ctx.obj = options
+    if ctx.invoked_subcommand is None:
+        return _cmd_run(options)
+    return None
+
+
+@app.command()
+def run(
+    ctx: typer.Context,
+    config_path: ConfigPathOption = None,
+    host: HostOption = "0.0.0.0",
+    port: PortOption = 8000,
+    log_level: LogLevelOption = "INFO",
+    advertise_url: AdvertiseUrlOption = None,
+    targets: TargetsOption = None,
+    reload_dirs: ReloadDirsOption = None,
+    reload: ReloadOption = None,
+) -> int:
+    current = _build_run_options(
+        config_path,
+        host,
+        port,
+        log_level,
+        advertise_url,
+        targets,
+        reload_dirs,
+        reload,
+    )
+    return _cmd_run(_merge_run_options(ctx, current))
+
+
+@app.command()
+def init(module_name: str, path: str = typer.Option("modules", "--path", help="Directory under which the module folder will be created (default: modules/).")) -> int:
+    return _cmd_init(module_name, path)
+
+
+@app.command(name="list")
+def list_modules(
+    config_path: ConfigPathOption = None,
+    output_json: bool = typer.Option(False, "--json", help="Output in machine-readable JSON format."),
+) -> int:
+    return _cmd_list(config_path, output_json)
+
+
+@app.command()
+def validate(
+    config_path: ConfigPathOption = None,
+    strict: bool = typer.Option(False, "--strict", help="Also run live connectivity checks (e.g. KV store ping)."),
+    output_json: bool = typer.Option(False, "--json", help="Output results in JSON format."),
+) -> int:
+    return _cmd_validate(config_path, strict, output_json)
+
+
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="dskity")
-    subparsers = parser.add_subparsers(dest="command")
+    try:
+        result = app(standalone_mode=False, args=argv, prog_name="dskity")
+    except ClickException as exc:
+        exc.show()
+        return exc.exit_code
+    except Exit as exc:
+        return exc.exit_code
 
-    # ── run (default) ───────────────────────────────────────────────────────
-    run_parser = subparsers.add_parser("run", help="Start the dskity server (default).")
-    _add_run_args(run_parser)
-
-    # ── init ────────────────────────────────────────────────────────────────
-    init_parser = subparsers.add_parser("init", help="Scaffold a new module skeleton.")
-    init_parser.add_argument("module_name", help="Name of the module to create (snake_case).")
-    init_parser.add_argument(
-        "--path",
-        dest="target_path",
-        default="modules",
-        help="Directory under which the module folder will be created (default: modules/).",
-    )
-
-    # ── list ────────────────────────────────────────────────────────────────
-    list_parser = subparsers.add_parser("list", help="List discovered modules and their status.")
-    list_parser.add_argument(
-        "--config",
-        "-c",
-        dest="config_path",
-        default=None,
-        help="Path to a TOML or YAML config file.",
-    )
-    list_parser.add_argument(
-        "--json",
-        dest="output_json",
-        action="store_true",
-        default=False,
-        help="Output in machine-readable JSON format.",
-    )
-
-    # ── validate ─────────────────────────────────────────────────────────────
-    validate_parser = subparsers.add_parser(
-        "validate", help="Validate configuration and module discovery."
-    )
-    validate_parser.add_argument(
-        "--config",
-        "-c",
-        dest="config_path",
-        default=None,
-        help="Path to a TOML or YAML config file.",
-    )
-    validate_parser.add_argument(
-        "--strict",
-        action="store_true",
-        default=False,
-        help="Also run live connectivity checks (e.g. KV store ping).",
-    )
-    validate_parser.add_argument(
-        "--json",
-        dest="output_json",
-        action="store_true",
-        default=False,
-        help="Output results in JSON format.",
-    )
-
-    # If no sub-command was given, treat the entire argv as arguments to `run`.
-    args, remaining = parser.parse_known_args(argv)
-
-    # Build token list from provided argv or sys.argv when argv is None.
-    tokens = list(argv) if argv is not None else sys.argv[1:]
-
-    if args.command is None:
-        # No explicit subcommand: treat entire token list as run args.
-        run_tokens = tokens
-        run_args = run_parser.parse_args(run_tokens)
-        return _cmd_run(run_args)
-
-    if args.command == "run":
-        # Locate the 'run' token and parse the following tokens as run args.
-        try:
-            idx = tokens.index("run")
-            run_tokens = tokens[idx + 1 :]
-        except ValueError:
-            # Fallback: use remaining tokens (may be empty) or everything after first token.
-            run_tokens = remaining or tokens[1:]
-        run_args = run_parser.parse_args(run_tokens)
-        return _cmd_run(run_args)
-
-    if args.command == "init":
-        return _cmd_init(args)
-
-    if args.command == "list":
-        return _cmd_list(args)
-
-    if args.command == "validate":
-        return _cmd_validate(args)
-
-    parser.print_help()
-    return 1
+    if result is None:
+        return 0
+    return int(result)
 
 
-def _add_run_args(p: argparse.ArgumentParser) -> None:
-    """Attach all server-run arguments to an ArgumentParser (or sub-parser)."""
-    p.add_argument(
-        "--config",
-        "-c",
-        dest="config_path",
-        default=None,
-        help="Path to a TOML or YAML config file that overrides the defaults",
-    )
-    p.add_argument("--host", "-H", default="0.0.0.0")
-    p.add_argument("--port", "-p", type=int, default=8000)
-    p.add_argument(
-        "--log-level",
-        "-l",
-        default="INFO",
-        dest="log_level",
-        help="Set log level of the application",
-    )
-    p.add_argument(
-        "--advertise-url",
-        dest="advertise_url",
-        default=None,
-        help="URL advertised in service discovery (if different from listen host/port)",
-    )
-    p.add_argument(
-        "--target",
-        "-t",
-        dest="targets",
-        action="append",
-        default=None,
-        help=(
-            "List of modules to enable (overrides YAML). "
-            "Accepts CSV (e.g. echo,health) and can be repeated (e.g. -t echo -t health)."
-        ),
-    )
-    p.add_argument(
-        "--reload-dir",
-        "-r",
-        dest="reload_dirs",
-        action="append",
-        default=None,
-        help=(
-            "Directories (comma-separated or repeated) to watch for reload. "
-            "If omitted, auto-computed from modules_search_paths. "
-            "Can also be set via DSKITY_RELOAD_DIRS env var."
-        ),
-    )
-    p.add_argument(
-        "--reload",
-        dest="reload",
-        action=argparse.BooleanOptionalAction,
-        default=None,
-        help="Enable or disable auto-reload (default: True unless DSKITY_ENV=production).",
-    )
-
-
-def _cmd_run(args: argparse.Namespace) -> int:
-    config_path = resolve_config_path(args.config_path)
+def _cmd_run(options: RunOptions) -> int:
+    config_path = resolve_config_path(options.config_path)
     load_dotenv()
 
     # Ensure the bootstrap uses the chosen YAML.
     os.environ["DSKITY_CONFIG"] = config_path
     # CLI flag > env var > config file value (read below)
     _env_level = os.environ.get("DSKITY_COMMON__LOGGING__LEVEL", "").strip()
-    log_level = (_env_level or args.log_level or "INFO").lower()
+    log_level = (_env_level or options.log_level or "INFO").lower()
 
-    targets = _parse_targets(args.targets)
+    targets = _parse_targets(options.targets)
     if targets:
         os.environ["DSKITY_TARGETS"] = ",".join(targets)
     else:
         os.environ.pop("DSKITY_TARGETS", None)
 
-    host = args.host or "0.0.0.0"
-    port = args.port or 8000
-    if args.advertise_url:
-        advertise_url = args.advertise_url
+    host = options.host or "0.0.0.0"
+    port = options.port or 8000
+    if options.advertise_url:
+        advertise_url = options.advertise_url
     else:
         advertise_url = f"http://{host}:{port}"
     os.environ["DSKITY_ADVERTISE_URL"] = advertise_url
@@ -291,7 +340,7 @@ def _cmd_run(args: argparse.Namespace) -> int:
     _config_data = _read_config_file(config_path, optional=True)
     _logging_cfg = _config_data.get("common", {}).get("logging", {})
     # If no CLI/env override, fall back to config file value
-    if not os.environ.get("DSKITY_COMMON__LOGGING__LEVEL", "").strip() and not args.log_level:
+    if not os.environ.get("DSKITY_COMMON__LOGGING__LEVEL", "").strip() and not options.log_level:
         log_level = (_logging_cfg.get("level", "INFO") or "INFO").lower()
     _log_format = (
         _logging_cfg.get("format", "text")
@@ -307,19 +356,19 @@ def _cmd_run(args: argparse.Namespace) -> int:
     env_reload = os.environ.get("DSKITY_RELOAD_DIRS")
     if env_reload:
         reload_dirs = [p.strip() for p in env_reload.split(",") if p.strip()]
-    elif getattr(args, "reload_dirs", None):
+    elif options.reload_dirs:
         parts: list[str] = []
-        for v in args.reload_dirs:
-            if not isinstance(v, str):
+        for value in options.reload_dirs:
+            if not isinstance(value, str):
                 continue
-            for p in v.split(","):
-                p = p.strip()
-                if p:
-                    parts.append(p)
+            for part in value.split(","):
+                part = part.strip()
+                if part:
+                    parts.append(part)
         reload_dirs = parts or None
 
     reload = _compute_reload(
-        args.reload,
+        options.reload,
         config_file_value=_config_data.get("reload"),
     )
 
@@ -346,15 +395,14 @@ def _cmd_run(args: argparse.Namespace) -> int:
     return 0
 
 
-def _cmd_init(args: argparse.Namespace) -> int:
+def _cmd_init(module_name: str, target_path: str) -> int:
     """Scaffold a new module under the given path."""
     from dskity.scaffold import scaffold_module, _to_pascal_case
 
-    module_name: str = args.module_name.strip()
-    target_path = Path(args.target_path)
+    module_name = module_name.strip()
 
     try:
-        created = scaffold_module(module_name, target_path)
+        created = scaffold_module(module_name, Path(target_path))
     except FileExistsError as exc:
         print(f"Error: {exc}")
         return 1
@@ -369,15 +417,15 @@ def _cmd_init(args: argparse.Namespace) -> int:
     return 0
 
 
-def _cmd_list(args: argparse.Namespace) -> int:
+def _cmd_list(config_path: str | None, output_json: bool) -> int:
     """List discovered modules and their status."""
     import json as _json
 
     from dskity.config.loader import load_config, resolve_config_path
     from dskity.modules.registry import ModuleRegistry
 
-    config_path = resolve_config_path(getattr(args, "config_path", None))
-    config = load_config(override_path=config_path)
+    resolved_config_path = resolve_config_path(config_path)
+    config = load_config(override_path=resolved_config_path)
 
     # Resolve module search packages (reuse bootstrap logic)
     from dskity.bootstrap import (
@@ -386,7 +434,7 @@ def _cmd_list(args: argparse.Namespace) -> int:
         _install_modules_search_paths,
     )
 
-    search_paths = _resolve_modules_search_paths(config, config_path)
+    search_paths = _resolve_modules_search_paths(config, resolved_config_path)
     _install_modules_search_paths(search_paths)
 
     packages = _resolve_modules_import_packages(config)
@@ -408,8 +456,6 @@ def _cmd_list(args: argparse.Namespace) -> int:
         cfg = config.modules.ensure(mod.meta.name)  # type: ignore[attr-defined]
         if getattr(cfg, "enabled", True):
             enabled_set.add(mod.meta.name)  # type: ignore[attr-defined]
-
-    output_json: bool = getattr(args, "output_json", False)
 
     if output_json:
         rows = []
@@ -448,15 +494,11 @@ def _cmd_list(args: argparse.Namespace) -> int:
     return 0
 
 
-def _cmd_validate(args: argparse.Namespace) -> int:
+def _cmd_validate(config_path: str | None, strict: bool, output_json: bool) -> int:
     """Validate configuration and module discovery."""
     import json as _json
 
     from dskity.validate import validate_config, CheckStatus
-
-    config_path = getattr(args, "config_path", None)
-    strict = getattr(args, "strict", False)
-    output_json = getattr(args, "output_json", False)
 
     report, exit_code = validate_config(config_path, strict=strict)
 
