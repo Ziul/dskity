@@ -209,6 +209,8 @@ async def _compute_factorial(
     if n <= 1:
         return 1, "local"
 
+    module_client = getattr(request.app.state, "examples_modules", None)
+
     # Attempt remote recursive call only when we have both a shared HTTP client
     # and a resolvable service URL. This demonstrates service discovery; the
     # local fallback ensures the route still works in development and tests.
@@ -219,18 +221,21 @@ async def _compute_factorial(
         pass
 
     if http_client is not None and self_url:
-        next_url = f"{self_url}/factorial/{n - 1}"
         request_id = getattr(request.state, "request_id", "-")
         headers = {"x-request-id": request_id}
-        log.debug("remote call → %s", next_url)
+        log.debug("remote call → %s/factorial/%d", self_url, n - 1)
 
         try:
-            resp = await http_client.get(next_url, headers=headers)
-            resp.raise_for_status()
-            sub = resp.json()
+            if module_client is not None:
+                sub = await module_client.factorial(n - 1, headers=headers)
+            else:
+                next_url = f"{self_url}/factorial/{n - 1}"
+                resp = await http_client.get(next_url, headers=headers)
+                resp.raise_for_status()
+                sub = resp.json()
             return n * sub["result"], "remote"
         except Exception as exc:
-            log.warning("remote call failed (%s - %s); falling back to local computation", exc, next_url)
+            log.warning("remote call failed (%s); falling back to local computation", exc)
 
     # Local iterative fallback — always correct, no external dependencies.
     log.debug("computing factorial(%d) locally", n)

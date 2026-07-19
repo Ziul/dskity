@@ -381,6 +381,38 @@ class OrdersModule(Module):
         ...
 ```
 
+  ### Generated module clients (`get_client`)
+
+  Every module can expose a generated async HTTP client built from its own routes.
+
+  - Call `module.get_client(app)` to build a client instance.
+  - Methods are generated from the module router paths.
+  - Calls are routed through service discovery (`app.modules.get(module_name)`) and use the shared async HTTP client (`app.state.http_client`).
+
+  Example:
+
+  ```python
+  from dskity.app import create_app
+  from examples.modules.example.module import get_module
+
+  app = create_app()
+  module = get_module()
+
+  client = module.get_client(app)
+  result = await client.factorial(5)
+  ```
+
+  Bootstrap also exposes clients automatically:
+
+  - `app.state.module_clients["examples"]`
+  - `app.state.examples_modules`
+
+  Method naming rules:
+
+  - Path `/factorial/{n}` -> `factorial(n)`
+  - Path `/events/emit` -> `events_emit(...)`
+  - Name collision by HTTP method gets a suffix, e.g. `items()` (GET) and `items_post(...)` (POST)
+
 ### Module discovery
 
 DSkity scans `modules_search_paths` for Python packages containing a `ModuleRegistry` or any class satisfying the `Module` protocol. Both local directories and importable package names are supported:

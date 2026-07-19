@@ -432,6 +432,21 @@ def bootstrap(app: FastAPI) -> None:
         hydrate_module_additional_settings(module, module_cfg)
         module.register(clients=clients, config=config)
 
+    app.state.module_clients = {}
+    for module in enabled_modules:
+        try:
+            module_client = module.get_client(app)
+        except Exception as exc:
+            app.state.logger.debug(
+                "Could not build client for module '%s': %s",
+                module.meta.name,
+                exc,
+            )
+            continue
+
+        app.state.module_clients[module.meta.name] = module_client
+        setattr(app.state, f"{module.meta.name}_modules", module_client)
+
     # Store enabled module instances for lifecycle hooks.
     app.state.enabled_modules_instances = enabled_modules
 

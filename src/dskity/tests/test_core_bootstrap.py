@@ -225,3 +225,17 @@ def test_core_config_json_omits_none_values() -> None:
     assert "modules_import_path" not in body or body["modules_import_path"] is not None
     assert "modules_search_paths" in body
     assert "null" not in resp.text
+
+
+def test_bootstrap_exposes_generic_module_clients_in_state() -> None:
+    app = create_app()
+
+    assert isinstance(app.state.module_clients, dict)
+    enabled_names = {mod.name for mod in app.state.enabled_modules}
+
+    for name in enabled_names:
+        assert name in app.state.module_clients
+        assert hasattr(app.state, f"{name}_modules")
+
+    if "examples" in enabled_names:
+        assert hasattr(app.state.examples_modules, "factorial")
