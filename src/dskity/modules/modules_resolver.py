@@ -8,6 +8,7 @@ from typing import Any
 import fastapi.routing
 from fastapi import FastAPI
 
+from dskity.config.settings import DSkitySettings
 from dskity.registry.service_registry import ServiceRegistry
 from dskity.network import get_current_host_port
 
@@ -79,6 +80,35 @@ def _static_urls_from_config(cfg: Any, service: str) -> list[str]:
 class ModulesResolver:
     app: FastAPI
 
+    def _config(self) -> DSkitySettings:
+        """Return app.state.config normalized as DSkitySettings."""
+        cfg = getattr(self.app.state, "config", None)
+        if isinstance(cfg, DSkitySettings):
+            return cfg
+
+        if cfg is None:
+            normalized = DSkitySettings()
+        else:
+            normalized = DSkitySettings.model_validate(cfg)
+
+        self.app.state.config = normalized
+        return normalized
+
+    def _configured_url_from_settings(self, service: str) -> str | None:
+        """Return modules.<service>.url from DSkitySettings-like config, when present."""
+        cfg = self._config()
+        modules_cfg = cfg.modules
+
+        try:
+            module_cfg = modules_cfg.ensure(service)
+        except Exception:
+            return None
+
+        url = getattr(module_cfg, "url", None)
+        if isinstance(url, str) and url.strip():
+            return url.strip().rstrip("/")
+        return None
+
     def urls(self, service: str) -> list[str]:
         service = str(service).strip()
         urls: list[str] = []
@@ -90,6 +120,16 @@ class ModulesResolver:
             import logging
 
             logger = logging.getLogger(__name__)
+
+        configured_url = self._configured_url_from_settings(service)
+        if configured_url:
+            logger.debug(
+                "Using configured URL for service '%s' from settings: %s",
+                service,
+                configured_url,
+            )
+            return [configured_url]
+
         store = getattr(self.app.state, "registry_store", None)
         if store is not None:
             logger.debug(f"Looking up service '{service}' in registry store")
@@ -112,8 +152,8 @@ class ModulesResolver:
 
         # Fallback (config): allow defining fixed URLs per module when discovery is not shared.
         # E.g.: with kv.store=inmemory in separate processes.
-        cfg: dict[str, Any] = getattr(self.app.state, "config", {}) or {}
-        urls = _static_urls_from_config(cfg, service)
+        cfg = self._config()
+        urls = _static_urls_from_config(cfg.model_dump(), service)
         if urls:
             logger.debug(f"Found URLs for service '{service}' in static config: {urls}")
             return urls
@@ -122,7 +162,7 @@ class ModulesResolver:
         )
 
         # Fallback: use internal base URL with current host and port. This allows modules to call each other using the internal network even if they are not registered in the registry store or configured with static URLs.
-        host, port = get_current_host_port()
+        host, port = get_current_host_port(self.app)
         base_url = f"http://{host}:{port}".rstrip("/")
         logger.debug(f"Using base URL for service '{service}': {base_url}")
 
@@ -181,12 +221,8 @@ class ModulesResolver:
 
     def _resolver_settings(self) -> Any:
         """Return ResolverSettings from app config, or defaults."""
-        cfg = getattr(self.app.state, "config", None)
-        if cfg and hasattr(cfg, "common") and hasattr(cfg.common, "resolver"):
-            return cfg.common.resolver
-        # Return a simple namespace with defaults.
-        from types import SimpleNamespace
-        return SimpleNamespace(timeout_seconds=5.0, max_retries=3, retry_delay_seconds=0.5)
+        cfg = self._config()
+        return cfg.common.resolver
 
     async def aurls(self, service: str) -> list[str]:
         """Async version of urls() with timeout and retry logic."""

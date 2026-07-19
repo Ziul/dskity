@@ -37,17 +37,6 @@ class KVBackend(Protocol):
     def keys(self, prefix: str = "") -> list[str]: ...
 
 
-def _kv_cfg(config: dict) -> dict[str, Any]:
-    cfg = config or {}
-    kv = cfg.get("kv") if isinstance(cfg, dict) else None
-    if isinstance(kv, dict):
-        return kv
-    legacy = cfg.get("kvstore") if isinstance(cfg, dict) else None
-    if isinstance(legacy, dict):
-        return legacy
-    return {}
-
-
 @dataclass
 class InMemoryKVBackend(KVBackend):
     _lock: RLock
@@ -121,37 +110,33 @@ class RedisKVBackend(KVBackend):
         return prefix
 
     @classmethod
-    def from_config(cls, config: dict) -> "RedisKVBackend":
+    def from_config(cls, config: DSkitySettings) -> "RedisKVBackend":
         if redis is None:
             raise RuntimeError(
                 "Redis dependency not installed. Install with: uv sync --extra kvstore-redis"
             )
 
-        kv_cfg = _kv_cfg(config)
-        redis_cfg = (kv_cfg or {}).get("redis", {}) if isinstance(kv_cfg, dict) else {}
+        kv_cfg = config.kv
+        redis_cfg = kv_cfg.redis
 
         url = (
             os.getenv("DSKITY_REDIS_URL")
             or os.getenv("REDIS_URL")
-            or (redis_cfg.get("url") if isinstance(redis_cfg, dict) else None)
+            or redis_cfg.url
             or "redis://127.0.0.1:6379/0"
         )
 
         username = os.getenv("DSKITY_REDIS_USERNAME") or (
-            redis_cfg.get("username") if isinstance(redis_cfg, dict) else None
+            redis_cfg.username
         )
         password = os.getenv("DSKITY_REDIS_PASSWORD") or (
-            redis_cfg.get("password") if isinstance(redis_cfg, dict) else None
+            redis_cfg.password
         )
-        key_prefix = cls._normalize_prefix(
-            str(redis_cfg.get("key_prefix") or "")
-            if isinstance(redis_cfg, dict)
-            else ""
-        )
+        key_prefix = cls._normalize_prefix(str(redis_cfg.key_prefix or ""))
 
         default_ttl_seconds = None
-        if isinstance(kv_cfg, dict) and kv_cfg.get("default_ttl_seconds") is not None:
-            default_ttl_seconds = int(kv_cfg.get("default_ttl_seconds"))
+        if kv_cfg.default_ttl_seconds is not None:
+            default_ttl_seconds = int(kv_cfg.default_ttl_seconds)
 
         kwargs: dict[str, Any] = {"decode_responses": True}
         if username:
@@ -232,52 +217,42 @@ class ConsulKVBackend(KVBackend):
         return prefix + "/"
 
     @classmethod
-    def from_config(cls, config: dict) -> "ConsulKVBackend":
+    def from_config(cls, config: DSkitySettings) -> "ConsulKVBackend":
         if consul is None:
             raise RuntimeError(
                 "Consul client dependency 'python-consul2' not installed. Install with: uv sync --extra kvstore-consul"
             )
 
-        kv_cfg = _kv_cfg(config)
-        consul_cfg = (
-            (kv_cfg or {}).get("consul", {}) if isinstance(kv_cfg, dict) else {}
-        )
+        kv_cfg = config.kv
+        consul_cfg = kv_cfg.consul
 
         url = (
             os.getenv("DSKITY_CONSUL_URL")
             or os.getenv("CONSUL_HTTP_ADDR")
-            or (consul_cfg.get("url") if isinstance(consul_cfg, dict) else None)
+            or consul_cfg.url
             or "http://127.0.0.1:8500"
         )
 
         token = (
             os.getenv("DSKITY_CONSUL_TOKEN")
             or os.getenv("CONSUL_HTTP_TOKEN")
-            or (consul_cfg.get("token") if isinstance(consul_cfg, dict) else None)
+            or consul_cfg.token
         )
 
-        dc = os.getenv("DSKITY_CONSUL_DC") or (
-            consul_cfg.get("dc") if isinstance(consul_cfg, dict) else None
-        )
+        dc = os.getenv("DSKITY_CONSUL_DC") or consul_cfg.dc
 
-        verify = (
-            consul_cfg.get("verify", True) if isinstance(consul_cfg, dict) else True
-        )
+        verify = consul_cfg.verify
 
         parsed = urllib.parse.urlparse(str(url))
         scheme = parsed.scheme or "http"
         host = parsed.hostname or "127.0.0.1"
         port = int(parsed.port or (8501 if scheme == "https" else 8500))
 
-        key_prefix = cls._normalize_prefix(
-            str(consul_cfg.get("key_prefix") or "")
-            if isinstance(consul_cfg, dict)
-            else ""
-        )
+        key_prefix = cls._normalize_prefix(str(consul_cfg.key_prefix or ""))
 
         default_ttl_seconds = None
-        if isinstance(kv_cfg, dict) and kv_cfg.get("default_ttl_seconds") is not None:
-            default_ttl_seconds = int(kv_cfg.get("default_ttl_seconds"))
+        if kv_cfg.default_ttl_seconds is not None:
+            default_ttl_seconds = int(kv_cfg.default_ttl_seconds)
 
         client = consul.Consul(
             host=host, port=port, scheme=scheme, token=token, dc=dc, verify=verify
@@ -394,37 +369,33 @@ class AsyncRedisKVBackend:
         return prefix
 
     @classmethod
-    def from_config(cls, config: dict) -> "AsyncRedisKVBackend":
+    def from_config(cls, config: DSkitySettings) -> "AsyncRedisKVBackend":
         if redis_async is None:
             raise RuntimeError(
                 "Redis async dependency not installed. Install with: pip install redis>=4.2"
             )
 
-        kv_cfg = _kv_cfg(config)
-        redis_cfg = (kv_cfg or {}).get("redis", {}) if isinstance(kv_cfg, dict) else {}
+        kv_cfg = config.kv
+        redis_cfg = kv_cfg.redis
 
         url = (
             os.getenv("DSKITY_REDIS_URL")
             or os.getenv("REDIS_URL")
-            or (redis_cfg.get("url") if isinstance(redis_cfg, dict) else None)
+            or redis_cfg.url
             or "redis://127.0.0.1:6379/0"
         )
 
         username = os.getenv("DSKITY_REDIS_USERNAME") or (
-            redis_cfg.get("username") if isinstance(redis_cfg, dict) else None
+            redis_cfg.username
         )
         password = os.getenv("DSKITY_REDIS_PASSWORD") or (
-            redis_cfg.get("password") if isinstance(redis_cfg, dict) else None
+            redis_cfg.password
         )
-        key_prefix = cls._normalize_prefix(
-            str(redis_cfg.get("key_prefix") or "")
-            if isinstance(redis_cfg, dict)
-            else ""
-        )
+        key_prefix = cls._normalize_prefix(str(redis_cfg.key_prefix or ""))
 
         default_ttl_seconds = None
-        if isinstance(kv_cfg, dict) and kv_cfg.get("default_ttl_seconds") is not None:
-            default_ttl_seconds = int(kv_cfg.get("default_ttl_seconds"))
+        if kv_cfg.default_ttl_seconds is not None:
+            default_ttl_seconds = int(kv_cfg.default_ttl_seconds)
 
         kwargs: dict[str, Any] = {"decode_responses": True}
         if username:
@@ -516,18 +487,9 @@ def generate_node_id() -> str:
     return f"{hostname}:{pid}"
 
 
-def backend_from_config(config: dict | DSkitySettings) -> tuple[str, KVBackend]:
-    if isinstance(config, DSkitySettings):
-        store = config.kv.store or "inmemory"
-        store = store.lower().strip()
-        default_ttl_seconds = config.kv.default_ttl_seconds
-    else:
-        kv_cfg = _kv_cfg(config)
-        logger.debug("KV config: %s", kv_cfg)
-        store = str(kv_cfg.get("store") or "inmemory").lower().strip()
-        default_ttl_seconds = None
-        if isinstance(kv_cfg, dict) and kv_cfg.get("default_ttl_seconds") is not None:
-            default_ttl_seconds = int(kv_cfg.get("default_ttl_seconds"))
+def backend_from_config(config: DSkitySettings) -> tuple[str, KVBackend]:
+    store = (config.kv.store or "inmemory").lower().strip()
+    default_ttl_seconds = config.kv.default_ttl_seconds
 
     logger.info("Detected kv.store='%s'", store)
     logger.debug("KV: %s", str(config))
@@ -536,14 +498,10 @@ def backend_from_config(config: dict | DSkitySettings) -> tuple[str, KVBackend]:
 
     if store == "redis":
         # Redis backend also reads default_ttl_seconds from the config.
-        return store, RedisKVBackend.from_config(
-            config.model_dump() if isinstance(config, DSkitySettings) else config
-        )
+        return store, RedisKVBackend.from_config(config)
 
     if store == "consul":
-        return store, ConsulKVBackend.from_config(
-            config.model_dump() if isinstance(config, DSkitySettings) else config
-        )
+        return store, ConsulKVBackend.from_config(config)
 
     # Keep names aligned with ecosystem (Cortex) and fail with explicit errors.
     if store in {"etcd"}:

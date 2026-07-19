@@ -4,8 +4,9 @@ import importlib
 import logging
 import pkgutil
 from dataclasses import dataclass
-from typing import Any, Iterable
+from typing import Iterable
 
+from dskity.config.settings import DSkitySettings
 from dskity.modules.contracts import Module
 
 logger = logging.getLogger(__name__)
@@ -42,38 +43,13 @@ class ModuleRegistry:
 
         return cls(modules=tuple(discovered))
 
-    def enabled_modules(self, config: Any) -> Iterable[Module]:
-        cfg = config or {}
-
-        modules_cfg: Any = {}
-        if isinstance(cfg, dict):
-            modules_cfg = cfg.get("modules")
-        else:
-            modules_cfg = getattr(cfg, "modules", None)
-
-        if modules_cfg is None:
-            modules_cfg = {}
+    def enabled_modules(self, config: DSkitySettings) -> Iterable[Module]:
+        modules_cfg = config.modules
 
         for module in self.modules:
             # New pattern: modules.<name>.enabled
-            module_cfg = None
-            if isinstance(modules_cfg, dict):
-                module_cfg = modules_cfg.get(module.meta.name)
-            elif hasattr(modules_cfg, "get"):
-                module_cfg = modules_cfg.get(module.meta.name)
-
-            if isinstance(module_cfg, dict) and "enabled" in module_cfg:
-                enabled = bool(module_cfg.get("enabled"))
-            elif hasattr(module_cfg, "enabled"):
-                enabled = bool(getattr(module_cfg, "enabled"))
-            else:
-                # Compat: old format (<name>.enabled)
-                legacy_cfg = (
-                    cfg.get(module.meta.name, {}) if isinstance(cfg, dict) else {}
-                )
-                enabled = bool(
-                    getattr(legacy_cfg, "get", lambda *_: True)("enabled", True)
-                )
+            module_cfg = modules_cfg.get(module.meta.name)
+            enabled = bool(getattr(module_cfg, "enabled", True))
 
             if enabled:
                 yield module

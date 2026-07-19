@@ -12,7 +12,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from dskity.config.loader import load_config
-from dskity.config.settings import hydrate_module_additional_settings
+from dskity.config.settings import DSkitySettings, hydrate_module_additional_settings
 from dskity.errors import install_error_handlers
 from dskity.health import install_health_checks
 from dskity.kvstore.backends import backend_from_config, generate_node_id
@@ -25,6 +25,7 @@ from dskity.modules.contracts import TransportClients
 from dskity.transport.mqtt import get_mqtt_client, shutdown_mqtt_client
 from dskity.transport.grpc import GRPCClient
 from dskity.modules.modules_resolver import ModulesResolver
+from dskity.network import update_runtime_host_port
 from dskity.request_id import install_request_id
 from dskity.registry.api import router as registry_router
 from dskity.registry.heartbeat import HeartbeatConfig, start_heartbeat, stop_heartbeat
@@ -94,7 +95,7 @@ def _resolve_app_init_dir(config_path: str | None) -> Path:
     return cfg_path.resolve().parent
 
 
-def _resolve_modules_search_paths(config, config_path: str | None) -> list[Path]:
+def _resolve_modules_search_paths(config: DSkitySettings, config_path: str | None) -> list[Path]:
     app_init_dir = _resolve_app_init_dir(config_path)
 
     candidates: list[Path] = [
@@ -147,7 +148,7 @@ def _is_probably_package_path(value: str) -> bool:
     return bool(parts) and all(part.isidentifier() for part in parts)
 
 
-def _resolve_modules_import_packages(config: Any) -> list[str]:
+def _resolve_modules_import_packages(config: DSkitySettings) -> list[str]:
     configured_paths = getattr(config, "modules_search_paths", []) or []
     candidates: list[str] = []
     for item in configured_paths:
@@ -267,6 +268,7 @@ def bootstrap(app: FastAPI) -> None:
 
     @app.middleware("http")
     async def _modules_resolver_middleware(request, call_next):
+        update_runtime_host_port(request.app, request.scope)
         # Ensure the resolver exists in the app instance at runtime.
         if not hasattr(request.app, "modules"):
             request.app.modules = ModulesResolver(request.app)  # type: ignore[attr-defined]

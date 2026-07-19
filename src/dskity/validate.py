@@ -17,6 +17,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
+from dskity.config.settings import DSkitySettings
+
 logger = logging.getLogger(__name__)
 
 
@@ -118,7 +120,7 @@ def validate_config(
         return report, parse_exit
 
     # ── Step 2: Validate settings via Pydantic ────────────────────────────
-    config: Any = None
+    config: DSkitySettings | None = None
     try:
         from dskity.config.loader import load_config
 
@@ -220,15 +222,12 @@ def validate_config(
     return report, report.exit_code(parse_exit)
 
 
-def _check_kv_connectivity(report: ValidationReport, config: Any) -> None:
+def _check_kv_connectivity(report: ValidationReport, config: DSkitySettings) -> None:
     """Attempt a live ping to the configured KV store backend."""
     try:
         from dskity.kvstore.backends import backend_from_config
 
-        kv_config = getattr(config, "kv", None) or getattr(
-            getattr(config, "common", None), "kv", None
-        )
-        backend = backend_from_config(kv_config)
+        _, backend = backend_from_config(config)
         # A simple set/delete roundtrip to validate connectivity
         backend.set("__dskity_validate__", "ok")
         backend.delete("__dskity_validate__")

@@ -4,6 +4,7 @@ import hashlib
 from dataclasses import dataclass
 from typing import Any
 
+from dskity.config.settings import DSkitySettings
 from dskity.kvstore.backends import generate_node_id
 from dskity.registry.service_registry import ServiceRegistry
 
@@ -63,17 +64,15 @@ class HashRing:
         return self._points[lo][1]
 
 
-def ring_from_config(config: dict[str, Any]) -> tuple[HashRing, str]:
-    kv_cfg = (config or {}).get("kv", {})
-    if not isinstance(kv_cfg, dict) or not kv_cfg:
-        kv_cfg = (config or {}).get("kvstore", {})
-    node_id = kv_cfg.get("node_id")
+def ring_from_config(config: DSkitySettings) -> tuple[HashRing, str]:
+    kv_cfg = config.kv
+    node_id = getattr(kv_cfg, "node_id", None)
     if not node_id:
         node_id = generate_node_id()
-    ring_cfg = kv_cfg.get("ring", {})
+    ring_cfg = kv_cfg.ring
 
-    vnodes = int(ring_cfg.get("vnodes", 64))
-    raw_nodes = ring_cfg.get("nodes", [])
+    vnodes = int(getattr(ring_cfg, "vnodes", 64))
+    raw_nodes = getattr(ring_cfg, "nodes", []) or []
 
     nodes: list[RingNode] = []
     for raw in raw_nodes:
@@ -89,7 +88,7 @@ def ring_from_config(config: dict[str, Any]) -> tuple[HashRing, str]:
 
 
 def ring_from_runtime(
-    app: Any, config: dict[str, Any], *, service: str = "kvstore"
+    app: Any, config: DSkitySettings, *, service: str = "kvstore"
 ) -> tuple[HashRing, str]:
     """Build the ring from service discovery (registry) when available.
 
@@ -103,18 +102,15 @@ def ring_from_runtime(
     # Prefer the global process instance_id (published in the registry), if present.
     instance_id = getattr(getattr(app, "state", None), "instance_id", None)
 
-    # config is now DSkitySettings (Pydantic model)
-    kv_cfg = config.kv if config else None
+    kv_cfg = config.kv
     node_id = instance_id
-    if not node_id and kv_cfg:
+    if not node_id:
         # Try to get node_id from config (if available)
         node_id = getattr(kv_cfg, "node_id", None)
     if not node_id:
         node_id = generate_node_id()
 
-    vnodes = 64  # Default
-    if kv_cfg and kv_cfg.ring:
-        vnodes = kv_cfg.ring.vnodes
+    vnodes = kv_cfg.ring.vnodes if kv_cfg and kv_cfg.ring else 64
 
     nodes: list[RingNode] = []
 

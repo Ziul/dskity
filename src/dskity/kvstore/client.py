@@ -6,6 +6,7 @@ from typing import Any
 
 import httpx
 
+from dskity.config.settings import DSkitySettings
 from dskity.kvstore.ring import HashRing, RingNode, ring_from_config
 
 
@@ -108,6 +109,6 @@ class AsyncKvStoreClient:
         resp.raise_for_status()
 
 
-def kvstore_client_from_config(config: dict) -> KvStoreClient:
+def kvstore_client_from_config(config: DSkitySettings) -> KvStoreClient:
     ring, _ = ring_from_config(config)
     return KvStoreClient(ring=ring)
