@@ -278,10 +278,11 @@ def bootstrap(app: FastAPI) -> None:
     # config is now DSkitySettings (Pydantic model), not a dict
     # NOTE: If not explicitly configured, we don't set advertise_url with port fallback.
     # The heartbeat and middleware handle registration with the correct port.
-    if config.common.advertise_url:
-        advertise_url = config.common.advertise_url
-    else:
-        advertise_url = None
+    advertise_url = (
+        os.getenv("DSKITY_COMMON__ADVERTISE_URL")
+        or os.getenv("DSKITY_ADVERTISE_URL")
+        or config.common.advertise_url
+    )
     app.state.advertise_url = (
         advertise_url.rstrip("/")
         if isinstance(advertise_url, str) and advertise_url

@@ -38,3 +38,6 @@ common:
 modules:
   health:
     enabled: true
+  external:
+    enabled: false
+    url: "https://my-dns/external-module"

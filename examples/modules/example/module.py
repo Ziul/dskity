@@ -132,10 +132,11 @@ class ExamplesModule(Module):
                     instance=str(request.url),
                 )
 
-            # Read live resources from app.state — NOT from `clients`,
-            # which was frozen before the lifespan ran.
-            http_client = getattr(request.app.state, "http_client", None)
-            event_bus = getattr(request.app.state, "event_bus", None)
+            # Read live resources from app.state using `clients.http` when available.
+            # `clients` is created before lifespan, but `clients.http.state` is live.
+            app_ref = clients.http or request.app
+            http_client = getattr(app_ref.state, "http_client", None)
+            event_bus = getattr(app_ref.state, "event_bus", None)
 
             result, via = await _compute_factorial(
                 n=n,
@@ -229,7 +230,7 @@ async def _compute_factorial(
             sub = resp.json()
             return n * sub["result"], "remote"
         except Exception as exc:
-            log.warning("remote call failed (%s); falling back to local computation", exc)
+            log.warning("remote call failed (%s - %s); falling back to local computation", exc, next_url)
 
     # Local iterative fallback — always correct, no external dependencies.
     log.debug("computing factorial(%d) locally", n)

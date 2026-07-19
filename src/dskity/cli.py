@@ -331,6 +331,8 @@ def _cmd_run(options: RunOptions) -> int:
         advertise_url = options.advertise_url
     else:
         advertise_url = f"http://{host}:{port}"
+    # Preferred key for pydantic nested settings + legacy key for compatibility.
+    os.environ["DSKITY_COMMON__ADVERTISE_URL"] = advertise_url
     os.environ["DSKITY_ADVERTISE_URL"] = advertise_url
 
     os.environ["DSKITY_PORT"] = str(port)
