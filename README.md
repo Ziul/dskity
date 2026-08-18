@@ -195,6 +195,31 @@ DSKITY_MODULES__ORDERS__DATABASE__URL=postgresql://user:pass@localhost/orders
 DSKITY_DB_URI=postgresql://user:pass@localhost/default
 ```
 
+Values in `settings.yaml` and `settings.toml` can also reference environment
+variables using `$VAR` or `${VAR}` syntax. For example:
+
+```yaml
+common:
+  logging:
+    level: "$LOG_LEVEL"
+```
+
+With `LOG_LEVEL=ERROR`, the application loads the logging level as `ERROR`.
+Unset variables are left unchanged.
+
+The same interpolation can be used in module database URLs:
+
+```yaml
+modules:
+  orders:
+    database:
+      url: "postgresql://$USER_DB:$PASS_DB@$HOST_DB:5432/my_database"
+```
+
+With `USER_DB=app_user`, `PASS_DB=app_password`, and
+`HOST_DB=db.example.com`, the resolved URL is
+`postgresql://app_user:app_password@db.example.com:5432/my_database`.
+
 `DSKITY_DB_URI` define o valor padrão de `modules.<name>.database.url` para
 módulos que não informarem uma URL própria. O fallback continua sendo
 `sqlite:///:memory:`.

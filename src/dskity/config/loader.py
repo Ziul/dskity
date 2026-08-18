@@ -46,6 +46,20 @@ def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any
     return result
 
 
+def _expand_environment_variables(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {
+            key: _expand_environment_variables(item) for key, item in value.items()
+        }
+    if isinstance(value, list):
+        return [_expand_environment_variables(item) for item in value]
+    if isinstance(value, tuple):
+        return tuple(_expand_environment_variables(item) for item in value)
+    if isinstance(value, str):
+        return os.path.expandvars(value)
+    return value
+
+
 def _read_config_file(path: str | Path, *, optional: bool = False) -> dict[str, Any]:
     path = Path(path)
     if not path.exists():
@@ -62,7 +76,7 @@ def _read_config_file(path: str | Path, *, optional: bool = False) -> dict[str, 
 
     if not isinstance(data, dict):
         raise ValueError(f"Config must be a top-level mapping: {path}")
-    return data
+    return _expand_environment_variables(data)
 
 
 def load_config(override_path: str | None = None) -> DSkitySettings:

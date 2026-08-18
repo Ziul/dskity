@@ -84,3 +84,51 @@ kv:
 
     assert cfg.common.internal_base_url == "http://yaml-fallback.example.com"
     assert cfg.kv.store == "redis"
+
+
+def test_load_config_expands_environment_variables_in_settings_yaml(
+    tmp_path: Path, monkeypatch
+) -> None:
+    settings_path = tmp_path / "settings.yaml"
+    settings_path.write_text(
+        """
+common:
+    logging:
+        level: "$LOG_LEVEL"
+""",
+        encoding="utf-8",
+    )
+
+    monkeypatch.setenv("LOG_LEVEL", "ERROR")
+    monkeypatch.delenv("DSKITY_COMMON__LOGGING__LEVEL", raising=False)
+    monkeypatch.chdir(tmp_path)
+
+    cfg = load_config()
+
+    assert cfg.common.logging.level == "ERROR"
+
+
+def test_load_config_expands_database_url_environment_variables(
+    tmp_path: Path, monkeypatch
+) -> None:
+    settings_path = tmp_path / "settings.yaml"
+    settings_path.write_text(
+        """
+modules:
+    orders:
+        database:
+            url: "postgresql://$USER_DB:$PASS_DB@$HOST_DB:5432/my_database"
+""",
+        encoding="utf-8",
+    )
+
+    monkeypatch.setenv("USER_DB", "app_user")
+    monkeypatch.setenv("PASS_DB", "app_password")
+    monkeypatch.setenv("HOST_DB", "db.example.com")
+    monkeypatch.chdir(tmp_path)
+
+    cfg = load_config()
+
+    assert cfg.modules.orders.database.url == (
+        "postgresql://app_user:app_password@db.example.com:5432/my_database"
+    )
