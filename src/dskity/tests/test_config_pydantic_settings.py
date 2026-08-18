@@ -9,7 +9,11 @@ import yaml
 from pydantic import BaseModel
 
 from dskity.config.loader import load_config
-from dskity.config.settings import ModuleSettings, hydrate_module_additional_settings
+from dskity.config.settings import (
+    ModuleDatabaseSettings,
+    ModuleSettings,
+    hydrate_module_additional_settings,
+)
 
 
 class ExtraSettings(BaseModel):
@@ -36,6 +40,26 @@ def test_load_config_basic() -> None:
     assert cfg.modules.kvstore.enabled is True
     assert cfg.modules.kvstore.__name__ == "kvstore"
     assert cfg.modules.get("person") is None
+
+
+def test_module_database_url_defaults_to_in_memory_database(monkeypatch) -> None:
+    monkeypatch.delenv("DSKITY_DB_URI", raising=False)
+
+    assert ModuleDatabaseSettings().url == "sqlite:///:memory:"
+
+
+def test_module_database_url_uses_dskity_db_uri_environment_variable(monkeypatch) -> None:
+    test_url = "postgresql://user:pass@localhost/app"
+    monkeypatch.setenv("DSKITY_DB_URI", test_url)
+
+    assert ModuleDatabaseSettings().url == test_url
+
+
+def test_module_database_url_keeps_explicit_value(monkeypatch) -> None:
+    monkeypatch.setenv("DSKITY_DB_URI", "postgresql://env.example/app")
+    explicit_url = "sqlite:///explicit.db"
+
+    assert ModuleDatabaseSettings(url=explicit_url).url == explicit_url
 
 
 def test_load_config_env_var_modules_search_paths() -> None:

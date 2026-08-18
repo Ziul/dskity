@@ -192,7 +192,16 @@ DSKITY_COMMON__LOG_LEVEL=DEBUG
 DSKITY_KV__STORE=redis
 DSKITY_KV__REDIS__URL=redis://localhost:6379/0
 DSKITY_MODULES__ORDERS__DATABASE__URL=postgresql://user:pass@localhost/orders
+DSKITY_DB_URI=postgresql://user:pass@localhost/default
 ```
+
+`DSKITY_DB_URI` define o valor padrão de `modules.<name>.database.url` para
+módulos que não informarem uma URL própria. O fallback continua sendo
+`sqlite:///:memory:`.
+
+Uma URL declarada no `settings.yaml` ou em uma variável específica do módulo,
+como `DSKITY_MODULES__ORDERS__DATABASE__URL`, tem precedência sobre
+`DSKITY_DB_URI`.
 
 ### Full settings reference
 

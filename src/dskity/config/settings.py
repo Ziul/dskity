@@ -8,6 +8,7 @@ Examples of environment variables:
 - DSKITY_KV__STORE="redis"
 - DSKITY_KV__REDIS__URL="redis://localhost:6379"
 - DSKITY_MODULES__PERSON__DATABASE__URL="postgresql://user:pass@localhost/db"
+- DSKITY_DB_URI="postgresql://user:pass@localhost/db"
 - DSKITY_COMMON__CORS__ENABLED=true
 - DSKITY_COMMON__LOGGING__FORMAT=json
 """
@@ -15,6 +16,7 @@ Examples of environment variables:
 from __future__ import annotations
 
 import json
+import os
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
@@ -186,7 +188,9 @@ class KvSettings(BaseModel):
 class ModuleDatabaseSettings(BaseModel):
     """Generic module database settings"""
 
-    url: str = "sqlite:///:memory:"
+    url: str = Field(
+        default_factory=lambda: os.getenv("DSKITY_DB_URI", "sqlite:///:memory:")
+    )
     pool_size: int = 10
     max_overflow: int = 20
     pool_pre_ping: bool = True
@@ -331,6 +335,7 @@ class DSkitySettings(BaseSettings):
     - DSKITY_COMMON__INTERNAL_BASE_URL="http://api.example.com"
     - DSKITY_KV__STORE="redis"
     - DSKITY_MODULES__PERSON__DATABASE__URL="postgresql://..."
+    - DSKITY_DB_URI="postgresql://user:pass@localhost/db"
     - DSKITY_MODULES_SEARCH_PATHS='["dskity.modules", "./services"]'
 
     Note: Use __ (two underscores) to separate hierarchy levels in YAML/env vars.

@@ -82,6 +82,7 @@ def load_config(override_path: str | None = None) -> DSkitySettings:
     - DSKITY_COMMON__INTERNAL_BASE_URL="http://api.example.com"
     - DSKITY_KV__STORE="redis"
     - DSKITY_MODULES__PERSON__DATABASE__URL="postgresql://user:pass@localhost/db"
+    - DSKITY_DB_URI="postgresql://user:pass@localhost/db" (default for module databases)
 
     Args:
         override_path: Optional path to an override YAML/TOML file
