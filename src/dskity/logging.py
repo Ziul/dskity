@@ -40,6 +40,40 @@ class JsonFormatter(logging.Formatter):
         )
 
 
+class LogfmtFormatter(logging.Formatter):
+    """Logfmt (key=value) log formatter."""
+
+    @staticmethod
+    def _quote_value(value: str) -> str:
+        """Quote value if it contains spaces or special characters."""
+        if not value or " " in value or "=" in value or '"' in value:
+            # Escape quotes and wrap in quotes
+            escaped = value.replace('"', '\\"')
+            return f'"{escaped}"'
+        return value
+
+    def format(self, record: logging.LogRecord) -> str:
+        # Format timestamp with milliseconds
+        dt = datetime.fromtimestamp(record.created)
+        timestamp = dt.strftime("%Y-%m-%dT%H:%M:%S") + f".{int(record.msecs):03d}Z"
+
+        message = record.getMessage()
+        request_id = getattr(record, "request_id", None) or "-"
+        
+        parts = [
+            f"timestamp={self._quote_value(timestamp)}",
+            f"level={record.levelname}",
+            f"logger={record.name}",
+            f"message={self._quote_value(message)}",
+            f"request_id={request_id}",
+            f"module={record.module}",
+            f"function={record.funcName}",
+            f"line={record.lineno}",
+        ]
+        
+        return " ".join(parts)
+
+
 def _level_from_env(default: str = "INFO") -> str:
     return (
         os.getenv("DSKITY_COMMON__LOGGING__LEVEL")
@@ -57,6 +91,7 @@ def build_logging_config(*, level: str | None = None, log_format: str | None = N
     fmt = (log_format or _format_from_env()).lower()
 
     use_json = fmt == "json"
+    use_logfmt = fmt == "logfmt"
 
     default_fmt = (
         "%(asctime)s %(levelname)s %(name)s request_id=%(request_id)s - %(message)s"
@@ -72,6 +107,15 @@ def build_logging_config(*, level: str | None = None, log_format: str | None = N
             },
             "access": {
                 "()": "dskity.logging.JsonFormatter",
+            },
+        }
+    elif use_logfmt:
+        formatters = {
+            "default": {
+                "()": "dskity.logging.LogfmtFormatter",
+            },
+            "access": {
+                "()": "dskity.logging.LogfmtFormatter",
             },
         }
     else:

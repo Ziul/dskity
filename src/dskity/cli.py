@@ -25,6 +25,7 @@ class RunOptions:
     host: str = "0.0.0.0"
     port: int = 8000
     log_level: str = "INFO"
+    log_format: str | None = None
     advertise_url: str | None = None
     targets: list[str] | None = None
     reload_dirs: list[str] | None = None
@@ -42,6 +43,10 @@ PortOption = Annotated[int, typer.Option("--port", "-p", help="Port to listen on
 LogLevelOption = Annotated[
     str,
     typer.Option("--log-level", "-l", help="Set log level of the application."),
+]
+LogFormatOption = Annotated[
+    str | None,
+    typer.Option("--log-format", help="Set log format (text, json, logfmt)."),
 ]
 AdvertiseUrlOption = Annotated[
     str | None,
@@ -179,6 +184,7 @@ def _build_run_options(
     host: str,
     port: int,
     log_level: str,
+    log_format: str | None,
     advertise_url: str | None,
     targets: list[str] | None,
     reload_dirs: list[str] | None,
@@ -189,6 +195,7 @@ def _build_run_options(
         host=host,
         port=port,
         log_level=log_level,
+        log_format=log_format,
         advertise_url=advertise_url,
         targets=targets,
         reload_dirs=reload_dirs,
@@ -227,6 +234,7 @@ def _root(
     host: HostOption = "0.0.0.0",
     port: PortOption = 8000,
     log_level: LogLevelOption = "INFO",
+    log_format: LogFormatOption | None = None,
     advertise_url: AdvertiseUrlOption = None,
     targets: TargetsOption = None,
     reload_dirs: ReloadDirsOption = None,
@@ -237,6 +245,7 @@ def _root(
         host,
         port,
         log_level,
+        log_format,
         advertise_url,
         targets,
         reload_dirs,
@@ -255,6 +264,7 @@ def run(
     host: HostOption = "0.0.0.0",
     port: PortOption = 8000,
     log_level: LogLevelOption = "INFO",
+    log_format: LogFormatOption | None = None,
     advertise_url: AdvertiseUrlOption = None,
     targets: TargetsOption = None,
     reload_dirs: ReloadDirsOption = None,
@@ -265,6 +275,7 @@ def run(
         host,
         port,
         log_level,
+        log_format,
         advertise_url,
         targets,
         reload_dirs,
@@ -344,12 +355,16 @@ def _cmd_run(options: RunOptions) -> int:
     # If no CLI/env override, fall back to config file value
     if not os.environ.get("DSKITY_COMMON__LOGGING__LEVEL", "").strip() and not options.log_level:
         log_level = (_logging_cfg.get("level", "INFO") or "INFO").lower()
+    # CLI flag > env var > config file value > default
     _log_format = (
-        _logging_cfg.get("format", "text")
-        or os.environ.get("DSKITY_COMMON__LOGGING__FORMAT", "text")
+        options.log_format
+        or os.environ.get("DSKITY_COMMON__LOGGING__FORMAT", "")
+        or _logging_cfg.get("format", "")
+        or "text"
     )
     # Publish resolved level so that bootstrap/modules read the same value
     os.environ["DSKITY_COMMON__LOGGING__LEVEL"] = log_level.upper()
+    os.environ["DSKITY_COMMON__LOGGING__FORMAT"] = _log_format
     log_config = configure_logging(level=log_level, log_format=_log_format)
 
     # Determine reload directories from environment or CLI

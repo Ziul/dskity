@@ -63,7 +63,7 @@ class CorsSettings(BaseModel):
 class LoggingSettings(BaseModel):
     """Logging settings (common.logging.*)"""
 
-    format: Literal["text", "json"] = "text"
+    format: Literal["text", "json", "logfmt"] = "text"
     level: str = "INFO"
 
 

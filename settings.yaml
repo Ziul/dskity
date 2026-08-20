@@ -14,6 +14,7 @@ common:
     enabled: true
     show_config: true
   logging:
+    format: json
     level: "ERROR"
   mqtt:
     enabled: false
