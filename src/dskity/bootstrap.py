@@ -15,6 +15,9 @@ from dskity.config.loader import load_config
 from dskity.config.settings import DSkitySettings, hydrate_module_additional_settings
 from dskity.errors import install_error_handlers
 from dskity.health import install_health_checks
+from dskity.tracer import initialize_tracer, install_trace_middleware
+from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
 from dskity.kvstore.backends import backend_from_config, generate_node_id
 from dskity.security_headers import SecurityHeadersMiddleware
 from dskity.transport.http_client import HttpClientManager
@@ -176,6 +179,36 @@ def bootstrap(app: FastAPI) -> None:
     # Store config in app.state for later access
     app.state.config = config
     app.title = config.name if config and config.name else app.title
+
+    # Initialize OpenTelemetry tracing if enabled
+    if config and config.common and config.common.otel and config.common.otel.enabled:
+        # Set OTEL env vars with precedence: existing env var > config > default
+        os.environ["OTEL_EXPORTER_OTLP_ENDPOINT"] = os.environ.get(
+            "OTEL_EXPORTER_OTLP_ENDPOINT", config.common.otel.endpoint
+        )
+        os.environ["OTEL_EXPORTER_OTLP_INSECURE"] = os.environ.get(
+            "OTEL_EXPORTER_OTLP_INSECURE", str(config.common.otel.insecure).lower()
+        )
+        os.environ["OTEL_SERVICE_NAME"] = os.environ.get(
+            "OTEL_SERVICE_NAME", config.common.otel.service_name or config.name or "dskity"
+        )
+        if config.common.otel.service_version:
+            os.environ["OTEL_SERVICE_VERSION"] = os.environ.get(
+                "OTEL_SERVICE_VERSION", config.common.otel.service_version
+            )
+        if config.common.otel.deployment_environment:
+            os.environ["OTEL_DEPLOYMENT_ENVIRONMENT"] = os.environ.get(
+                "OTEL_DEPLOYMENT_ENVIRONMENT", config.common.otel.deployment_environment
+            )
+        os.environ["OTEL_LOG_LEVEL"] = os.environ.get(
+            "OTEL_LOG_LEVEL", config.common.logging.level or "INFO"
+        )
+        initialize_tracer(config)
+        install_trace_middleware(app)  # Install global request_id middleware
+        FastAPIInstrumentor.instrument_app(app)
+        HTTPXClientInstrumentor().instrument()
+        logger.info("OpenTelemetry tracing initialized with endpoint: %s", config.common.otel.endpoint)
+        app.state.otel_enabled = True
 
     # Make MQTT client_id unique by appending UUID
     if config and config.common and config.common.mqtt and config.common.mqtt.enabled:

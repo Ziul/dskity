@@ -134,6 +134,35 @@ class HttpClientSettings(BaseModel):
     max_keepalive_connections: int = 20
 
 
+class OtelSettings(BaseModel):
+    """OpenTelemetry (OTEL) tracing settings (common.otel.*)"""
+
+    enabled: bool = Field(
+        default=False,
+        description="Enable OpenTelemetry tracing and span export",
+    )
+    endpoint: str = Field(
+        default=os.environ.get("OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4317"),
+        description="OTLP gRPC endpoint URL (e.g., http://localhost:4317 for Tempo/Jaeger)",
+    )
+    insecure: bool = Field(
+        default=True,
+        description="Use insecure connection (no TLS) to OTLP endpoint",
+    )
+    service_name: str | None = Field(
+        default=None,
+        description="Service name for traces. If not set, uses the application name.",
+    )
+    service_version: str | None = Field(
+        default=None,
+        description="Service version for traces",
+    )
+    deployment_environment: str | None = Field(
+        default=None,
+        description="Deployment environment (e.g., production, staging, development)",
+    )
+
+
 class CommonSettings(BaseModel):
     """Common settings (common.*)"""
 
@@ -148,6 +177,7 @@ class CommonSettings(BaseModel):
     admin: AdminSettings = Field(default_factory=AdminSettings)
     security_headers: SecurityHeadersSettings = Field(default_factory=SecurityHeadersSettings)
     http_client: HttpClientSettings = Field(default_factory=HttpClientSettings)
+    otel: OtelSettings = Field(default_factory=OtelSettings)
 
 
 class RedisSettings(BaseModel):
@@ -353,6 +383,11 @@ class DSkitySettings(BaseSettings):
     modules: ModulesSettings = Field(default_factory=ModulesSettings)
     modules_search_paths: list[str] = Field(default_factory=lambda: ["modules"])
     name: str | None = "Dskity"  # Optional name for env var prefixing
+    environment: str | None = Field(
+        default=None,
+        description="Optional environment name (e.g., production, staging, development)",
+        alias="env",  # Allow DSKITY_ENVI as shorthand for DSKITY_ENVIRONMENT
+    )
     reload: bool | None = Field(
         default=None,
         description=(

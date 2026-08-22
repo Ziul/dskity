@@ -14,8 +14,10 @@ common:
     enabled: true
     show_config: true
   logging:
-    format: json
+    format: text
     level: "ERROR"
+  otel:
+    enabled: true
   mqtt:
     enabled: false
     broker: "mqtts://localhost"
