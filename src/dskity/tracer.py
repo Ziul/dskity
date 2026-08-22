@@ -1,4 +1,4 @@
-from opentelemetry import trace, context
+from opentelemetry import trace
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
@@ -7,7 +7,7 @@ from logging import getLogger
 from dskity.config.settings import DSkitySettings
 from fastapi import FastAPI, Request
 from contextvars import ContextVar
-from importlib.metadata import version
+from importlib.metadata import version, PackageNotFoundError
 
 
 # Context variables for tracing attributes
@@ -53,9 +53,17 @@ def initialize_tracer(config: DSkitySettings) -> None:
     otel_cfg = config.common.otel
     logger = getLogger(__name__)
     
+    # Get service version with fallback to "unknown" if package metadata not found
+    service_version = otel_cfg.service_version
+    if not service_version:
+        try:
+            service_version = version(config.name)
+        except PackageNotFoundError:
+            service_version = "unknown"
+    
     resource = Resource.create({
         "service.name": otel_cfg.service_name or config.name or "dskity",
-        "service.version": otel_cfg.service_version or version(config.name),
+        "service.version": service_version,
         "deployment.environment": otel_cfg.deployment_environment or "unknown",
     })
 

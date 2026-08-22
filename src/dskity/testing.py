@@ -51,6 +51,8 @@ def _temp_config_file(name: str = "test-service", extra_yaml: str = ""):
         common:
           registry:
             enabled: false
+          otel:
+            enabled: false
         {extra_yaml}
     """)
     with tempfile.NamedTemporaryFile(

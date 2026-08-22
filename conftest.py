@@ -22,4 +22,17 @@ def setup_test_environment():
     """
     yield
 
-    # Optional cleanup after all tests
+    # Cleanup OpenTelemetry tracer provider after all tests
+    # This prevents threads from trying to export/log after pytest shuts down
+    try:
+        from opentelemetry import trace
+        from opentelemetry.sdk.trace import TracerProvider
+        
+        provider = trace.get_tracer_provider()
+        if isinstance(provider, TracerProvider):
+            # Force flush and shutdown to stop the batch processor thread
+            provider.force_flush(timeout_millis=1000)
+            provider.shutdown()
+    except Exception:
+        # Silently ignore any cleanup errors
+        pass
