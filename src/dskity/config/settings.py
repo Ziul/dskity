@@ -161,6 +161,10 @@ class OtelSettings(BaseModel):
         default=None,
         description="Deployment environment (e.g., production, staging, development)",
     )
+    excluded_urls: list[str] = Field(
+        default_factory=lambda: ["^/metrics$", "^/health$", "^/healthz$"],
+        description="List of URL patterns (regex) to exclude from tracing",
+    )
 
 
 class CommonSettings(BaseModel):

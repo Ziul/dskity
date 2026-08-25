@@ -16,6 +16,7 @@ from dskity.config.settings import DSkitySettings, hydrate_module_additional_set
 from dskity.errors import install_error_handlers
 from dskity.health import install_health_checks
 from dskity.tracer import initialize_tracer, install_trace_middleware
+from opentelemetry import trace
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
 from dskity.kvstore.backends import backend_from_config, generate_node_id
@@ -205,7 +206,17 @@ def bootstrap(app: FastAPI) -> None:
         )
         initialize_tracer(config)
         install_trace_middleware(app)  # Install global request_id middleware
-        FastAPIInstrumentor.instrument_app(app)
+        otel_cfg = config.common.otel
+        excluded_urls_str = ",".join(otel_cfg.excluded_urls) if otel_cfg.excluded_urls else None
+        # Set environment variables for FastAPI and HTTPX instrumentors
+        if excluded_urls_str:
+            os.environ["OTEL_PYTHON_FASTAPI_EXCLUDED_URLS"] = excluded_urls_str
+            os.environ["OTEL_PYTHON_HTTPX_EXCLUDED_URLS"] = excluded_urls_str
+        FastAPIInstrumentor.instrument_app(
+            app,
+            tracer_provider=trace.get_tracer_provider(),
+            excluded_urls=excluded_urls_str,
+        )
         HTTPXClientInstrumentor().instrument()
         logger.info("OpenTelemetry tracing initialized with endpoint: %s", config.common.otel.endpoint)
         app.state.otel_enabled = True
