@@ -1,13 +1,18 @@
+from __future__ import annotations
+
+from contextvars import ContextVar
+from importlib.metadata import PackageNotFoundError, version
+from logging import getLogger
+
+from fastapi import FastAPI, Request
 from opentelemetry import trace
+from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
-from logging import getLogger
+
 from dskity.config.settings import DSkitySettings
-from fastapi import FastAPI, Request
-from contextvars import ContextVar
-from importlib.metadata import version, PackageNotFoundError
 
 
 # Context variables for tracing attributes
@@ -33,6 +38,11 @@ def set_trace_request_id(request_id: str | None) -> None:
 def set_trace_module_name(module_name: str | None) -> None:
     """Set the module name in trace context."""
     _module_name_ctx.set(module_name)
+
+
+def get_tracer(name: str = "dskity") -> trace.Tracer:
+    """Get a tracer instance from OpenTelemetry."""
+    return trace.get_tracer(name)
 
 
 def add_span_attributes(**kwargs) -> None:
@@ -145,3 +155,18 @@ def install_trace_middleware(app: FastAPI) -> None:
     This replaces the need for per-module middleware.
     """
     install_request_id_middleware(app)
+
+
+def initialize_instrumentation(config: DSkitySettings | None = None) -> None:
+    """
+    Initialize auto-instrumentation for HTTPX (inter-module HTTP communication).
+    FastAPI app instrumentation is handled per-app via FastAPIInstrumentor.instrument_app().
+    """
+    logger = getLogger(__name__)
+    tp = trace.get_tracer_provider()
+
+    try:
+        HTTPXClientInstrumentor().instrument(tracer_provider=tp)
+        logger.debug("HTTPX instrumentation initialized")
+    except Exception as e:
+        logger.warning("Failed to initialize HTTPX instrumentation: %s", e)

@@ -217,6 +217,47 @@ def test_middleware_cleans_up_context_after_request() -> None:
     set_trace_module_name(None)
     assert get_trace_request_id() is None
     assert get_trace_module_name() is None
+
+
+def test_metrics_url_excluded_from_tracing() -> None:
+    """Test that requests to /metrics are excluded from tracing."""
+    from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+    from opentelemetry.sdk.trace import TracerProvider
+    from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+    from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
+
+    exporter = InMemorySpanExporter()
+    provider = TracerProvider()
+    provider.add_span_processor(SimpleSpanProcessor(exporter))
+
+    app = FastAPI()
+
+    @app.get("/metrics")
+    def metrics_endpoint():
+        return "prometheus metrics"
+
+    @app.get("/api/users")
+    def users_endpoint():
+        return "users list"
+
+    config = DSkitySettings()
+    excluded_urls_str = ",".join(config.common.otel.excluded_urls)
+
+    FastAPIInstrumentor.instrument_app(
+        app,
+        tracer_provider=provider,
+        excluded_urls=excluded_urls_str,
+    )
+
+    client = TestClient(app)
+    client.get("/metrics")
+    client.get("/api/users")
+
+    spans = exporter.get_finished_spans()
+    span_names = [s.name for s in spans]
+    assert any("users" in name for name in span_names)
+    assert not any("metrics" in name for name in span_names)
+
     
     client = TestClient(app)
     client.get("/test")
