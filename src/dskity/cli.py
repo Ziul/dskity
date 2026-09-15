@@ -8,6 +8,26 @@ from pathlib import Path
 from typing import Annotated
 
 from dotenv import load_dotenv
+
+
+def _load_dotenv_recursive() -> None:
+    """Load .env by searching up from cwd, then from project root."""
+    # Try current directory first
+    current = Path.cwd()
+    max_levels = 10  # Prevent infinite loops
+    
+    for _ in range(max_levels):
+        env_path = current / ".env"
+        if env_path.exists():
+            load_dotenv(str(env_path))
+            return
+        parent = current.parent
+        if parent == current:  # Reached filesystem root
+            break
+        current = parent
+    
+    # Fallback: just call load_dotenv() with no args (uses cwd)
+    load_dotenv()
 from click.core import ParameterSource
 from click.exceptions import ClickException, Exit
 import typer
@@ -240,6 +260,9 @@ def _root(
     reload_dirs: ReloadDirsOption = None,
     reload: ReloadOption = None,
 ) -> int | None:
+    # Load .env file if it exists (before building options so env vars are available)
+    _load_dotenv_recursive()
+    
     options = _build_run_options(
         config_path,
         host,
@@ -322,7 +345,7 @@ def main(argv: list[str] | None = None) -> int:
 
 def _cmd_run(options: RunOptions) -> int:
     config_path = resolve_config_path(options.config_path)
-    load_dotenv()
+    _load_dotenv_recursive()
 
     # Ensure the bootstrap uses the chosen YAML.
     os.environ["DSKITY_CONFIG"] = config_path

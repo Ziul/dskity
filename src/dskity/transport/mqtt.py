@@ -7,6 +7,7 @@ import logging
 import ssl
 from typing import Callable
 from concurrent.futures import Future
+from pydantic import SecretStr
 
 try:
     import paho.mqtt.client as mqtt
@@ -203,13 +204,16 @@ class MQTTClient:
 
                 # Set credentials if provided
                 if self.config.username and self.config.password:
-                    # Extract the actual password value if it's a SecretStr
-                    password = self.config.password
-                    if hasattr(password, 'get_secret_value'):
-                        password = password.get_secret_value()
-                    self.client.username_pw_set(
-                        self.config.username, password
-                    )
+                    # Extract the actual values if they're SecretStr
+                    if isinstance(self.config.username, SecretStr):
+                        username = self.config.username.get_secret_value()
+                    else:
+                        username = self.config.username
+                    if isinstance(self.config.password, SecretStr):
+                        password = self.config.password.get_secret_value()
+                    else:
+                        password = self.config.password
+                    self.client.username_pw_set(username, password)
 
                 # Configure TLS/SSL if enabled
                 if self.config.tls_secure:
