@@ -16,7 +16,7 @@ def test_main_parses_run_port_without_subcommand(tmp_path, monkeypatch, argv) ->
     calls: dict[str, object] = {}
 
     monkeypatch.setenv("DSKITY_ENV", "production")
-    monkeypatch.setattr("dskity.cli.load_dotenv", lambda: None)
+    monkeypatch.setattr("dskity.cli.load_dotenv", lambda *args, **kwargs: None)
     monkeypatch.setattr("dskity.cli.resolve_config_path", lambda _: str(config_path))
     monkeypatch.setattr("dskity.cli._read_config_file", lambda *_args, **_kwargs: {})
     monkeypatch.setattr("dskity.cli.configure_logging", lambda **_kwargs: {})

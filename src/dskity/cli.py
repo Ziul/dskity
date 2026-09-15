@@ -9,6 +9,15 @@ from typing import Annotated
 
 from dotenv import load_dotenv
 
+from click.core import ParameterSource
+from click.exceptions import ClickException, Exit
+import typer
+import uvicorn
+
+from dskity.config.loader import resolve_config_path, _read_config_file
+from dskity.logging import configure_logging
+
+logger = logging.getLogger(__name__)
 
 def _load_dotenv_recursive() -> None:
     """Load .env by searching up from cwd, then from project root."""
@@ -28,15 +37,6 @@ def _load_dotenv_recursive() -> None:
     
     # Fallback: just call load_dotenv() with no args (uses cwd)
     load_dotenv()
-from click.core import ParameterSource
-from click.exceptions import ClickException, Exit
-import typer
-import uvicorn
-
-from dskity.config.loader import resolve_config_path, _read_config_file
-from dskity.logging import configure_logging
-
-logger = logging.getLogger(__name__)
 
 
 @dataclass(slots=True)
