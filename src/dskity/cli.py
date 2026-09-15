@@ -458,21 +458,44 @@ def _cmd_list(config_path: str | None, output_json: bool) -> int:
     if not packages:
         packages = ["dskity.modules"]
 
-    discovered: dict[str, object] = {}
+    # Discover CORE modules (from dskity.modules)
+    core_discovered: dict[str, object] = {}
+    try:
+        core_registry = ModuleRegistry.from_package("dskity.modules")
+        for mod in core_registry.modules:
+            core_discovered[mod.meta.name] = mod
+    except ModuleNotFoundError:
+        pass
+
+    # Discover USER modules (from other packages)
+    user_discovered: dict[str, object] = {}
     for package in packages:
+        if package == "dskity.modules":
+            continue
         try:
             registry = ModuleRegistry.from_package(package)
         except ModuleNotFoundError:
             continue
         for mod in registry.modules:
-            discovered.setdefault(mod.meta.name, mod)
+            user_discovered.setdefault(mod.meta.name, mod)
+
+    # Combine both registries for full view
+    discovered = {**core_discovered, **user_discovered}
+    
+    # Create registries for enabled status checking
+    core_registry = ModuleRegistry(modules=tuple(core_discovered.values()))
+    user_registry = ModuleRegistry(modules=tuple(user_discovered.values()))
 
     # Determine enabled status
     enabled_set: set[str] = set()
-    for mod in discovered.values():
-        cfg = config.modules.ensure(mod.meta.name)  # type: ignore[attr-defined]
-        if getattr(cfg, "enabled", True):
-            enabled_set.add(mod.meta.name)  # type: ignore[attr-defined]
+    
+    # Core modules are controlled by common.registry.enabled
+    for mod in core_registry.enabled_core_modules(config):
+        enabled_set.add(mod.meta.name)  # type: ignore[attr-defined]
+    
+    # User modules are disabled by default (via modules.<name>.enabled)
+    for mod in user_registry.enabled_modules(config):
+        enabled_set.add(mod.meta.name)  # type: ignore[attr-defined]
 
     if output_json:
         rows = []

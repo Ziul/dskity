@@ -143,6 +143,20 @@ def test_bootstrap_logs_loaded_modules(caplog, monkeypatch) -> None:
     monkeypatch.setattr(
         bootstrap_mod.ModuleRegistry, "from_package", lambda _pkg: fake_registry
     )
+    
+    # Enable modules explicitly via config
+    monkeypatch.setattr(
+        bootstrap_mod,
+        "load_config",
+        lambda override_path=None: DSkitySettings.model_validate(
+            {
+                "modules": {
+                    "health": {"enabled": True},
+                    "echo": {"enabled": True},
+                }
+            }
+        ),
+    )
 
     logged_messages: list[str] = []
 

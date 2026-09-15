@@ -36,30 +36,41 @@ def test_load_config_basic() -> None:
 
     assert cfg.common.internal_base_url == "http://127.0.0.1:8000"
     assert cfg.kv.store == "inmemory"
-    assert "modules" in cfg.modules_search_paths
-    assert cfg.modules.kvstore.enabled is True
-    assert cfg.modules.kvstore.__name__ == "kvstore"
+    assert any("modules" in path for path in cfg.modules_search_paths)
+    # kvstore is a core module controlled by common.registry.enabled
+    assert cfg.common.registry.enabled is True
     assert cfg.modules.get("person") is None
 
 
 def test_module_database_url_defaults_to_in_memory_database(monkeypatch) -> None:
     monkeypatch.delenv("DSKITY_DB_URI", raising=False)
 
-    assert ModuleDatabaseSettings().url == "sqlite:///:memory:"
+    actual_url = ModuleDatabaseSettings().url
+    if hasattr(actual_url, 'get_secret_value'):
+        actual_url = actual_url.get_secret_value()
+    assert actual_url == "sqlite:///:memory:"
 
 
 def test_module_database_url_uses_dskity_db_uri_environment_variable(monkeypatch) -> None:
     test_url = "postgresql://user:pass@localhost/app"
     monkeypatch.setenv("DSKITY_DB_URI", test_url)
 
-    assert ModuleDatabaseSettings().url == test_url
+    actual_url = ModuleDatabaseSettings().url
+    if hasattr(actual_url, 'get_secret_value'):
+        actual_url = actual_url.get_secret_value()
+    assert actual_url == test_url
 
 
 def test_module_database_url_keeps_explicit_value(monkeypatch) -> None:
     monkeypatch.setenv("DSKITY_DB_URI", "postgresql://env.example/app")
     explicit_url = "sqlite:///explicit.db"
 
-    assert ModuleDatabaseSettings(url=explicit_url).url == explicit_url
+    settings = ModuleDatabaseSettings(url=explicit_url)
+    # Extract value if it's a SecretStr
+    actual_url = settings.url
+    if hasattr(actual_url, 'get_secret_value'):
+        actual_url = actual_url.get_secret_value()
+    assert actual_url == explicit_url
 
 
 def test_load_config_env_var_modules_search_paths() -> None:
@@ -123,7 +134,10 @@ def test_load_config_env_var_nested_person_database() -> None:
 
     try:
         cfg = load_config()
-        assert cfg.modules.person.database.url == test_url
+        actual_url = cfg.modules.person.database.url
+        if hasattr(actual_url, 'get_secret_value'):
+            actual_url = actual_url.get_secret_value()
+        assert actual_url == test_url
         assert cfg.modules.person.__name__ == "person"
     finally:
         del os.environ["DSKITY_MODULES__PERSON__DATABASE__URL"]

@@ -12,7 +12,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from dskity.config.loader import load_config
-from dskity.config.settings import DSkitySettings, hydrate_module_additional_settings
+from dskity.config.settings import DSkitySettings, hydrate_module_additional_settings, ModuleSettings
 from dskity.errors import install_error_handlers
 from dskity.health import install_health_checks
 from dskity.tracer import initialize_tracer, install_trace_middleware, initialize_instrumentation
@@ -390,40 +390,60 @@ def bootstrap(app: FastAPI) -> None:
         modules_import_packages = ["dskity.modules"]
     app.state.modules_import_packages = modules_import_packages
 
-    discovered_by_name: dict[str, Any] = {}
+    # Discover CORE modules (from dskity.modules)
+    # Core modules are controlled by common.registry.enabled
+    core_discovered_by_name: dict[str, Any] = {}
+    try:
+        app.state.logger.debug("Attempting to discover core modules in 'dskity.modules'...")
+        core_registry = ModuleRegistry.from_package("dskity.modules")
+        for module in core_registry.modules:
+            core_discovered_by_name[module.meta.name] = module
+    except ModuleNotFoundError:
+        app.state.logger.debug("Core modules package 'dskity.modules' not found...")
+
+    # Discover USER modules (from modules_search_paths and modules_import_packages)
+    # User modules are disabled by default and enabled via modules.<name>.enabled
+    user_discovered_by_name: dict[str, Any] = {}
     for package in modules_import_packages:
+        # Skip dskity.modules as those are core modules
+        if package == "dskity.modules":
+            continue
         try:
             app.state.logger.debug(
-                f"Attempting to discover modules in package '{package}'..."
+                f"Attempting to discover user modules in package '{package}'..."
             )
             package_registry = ModuleRegistry.from_package(package)
         except ModuleNotFoundError:
-            app.state.logger.debug(f"Module not found in package '{package}'...")
+            app.state.logger.debug(f"User module package '{package}' not found...")
             continue
 
         for module in package_registry.modules:
-            discovered_by_name.setdefault(module.meta.name, module)
+            user_discovered_by_name.setdefault(module.meta.name, module)
 
-    if not discovered_by_name:
+    if not core_discovered_by_name and not user_discovered_by_name:
         app.state.logger.debug(
             "No modules found in modules_search_paths=%s.",
             modules_import_packages,
         )
 
-    registry = ModuleRegistry(modules=tuple(discovered_by_name.values()))
+    # Create registries for core and user modules
+    core_registry = ModuleRegistry(modules=tuple(core_discovered_by_name.values()))
+    user_registry = ModuleRegistry(modules=tuple(user_discovered_by_name.values()))
+
+    # Determine which modules to load
     if target_modules:
         # Include dependencies of requested targets (transitive closure).
         # Even if a dependency is disabled in settings, honor it when explicitly
         # requested as part of a target dependency chain.
         desired: set[str] = set(target_modules)
-        # Map for quick lookup
-        by_name = {m.meta.name: m for m in registry.modules}
+        # Map for quick lookup (both core and user)
+        all_modules = {**core_discovered_by_name, **user_discovered_by_name}
         # Expand closure
         added = True
         while added:
             added = False
             for name in list(desired):
-                mod = by_name.get(name)
+                mod = all_modules.get(name)
                 if not mod:
                     continue
                 for dep in getattr(mod.meta, "depends_on", ()):  # type: ignore[attr-defined]
@@ -433,17 +453,27 @@ def bootstrap(app: FastAPI) -> None:
 
         # Warn about missing dependencies not discovered
         for name in list(desired):
-            if name not in by_name:
+            if name not in all_modules:
                 logger.warning(
                     "Requested module '%s' or its dependency was not discovered; skipping: %s",
                     name,
                     name,
                 )
 
-        enabled_modules = [m for m in registry.modules if m.meta.name in desired]
+        # Filter to get enabled modules from core and user registries
+        enabled_modules = []
+        for m in core_registry.modules:
+            if m.meta.name in desired:
+                enabled_modules.append(m)
+        for m in user_registry.modules:
+            if m.meta.name in desired:
+                enabled_modules.append(m)
         app.state.target_modules = sorted(desired)
     else:
-        enabled_modules = list(registry.enabled_modules(config))
+        # Get enabled core modules (enabled by default) and enabled user modules (disabled by default)
+        enabled_core = list(core_registry.enabled_core_modules(config))
+        enabled_user = list(user_registry.enabled_modules(config))
+        enabled_modules = enabled_core + enabled_user
 
     # Topological sort: respect depends_on declarations.
     enabled_modules = _topological_sort(enabled_modules)
@@ -476,7 +506,15 @@ def bootstrap(app: FastAPI) -> None:
     clients = TransportClients(http=app, grpc=grpc_client, mqtt=mqtt_client, events=_event_bus_early)
 
     for module in enabled_modules:
-        module_cfg = config.modules.ensure(module.meta.name)
+        # Get existing module config from settings.yaml
+        # Do NOT use ensure() as it creates modules with enabled=True by default
+        # for modules that are not configured, which can cause validation errors
+        # when the module has required fields in its additional_settings_model.
+        module_cfg = config.modules.get(module.meta.name)
+        if module_cfg is None:
+            # Module is in enabled_modules because it's in target_modules,
+            # but not explicitly configured in settings. Create minimal config.
+            module_cfg = ModuleSettings.model_validate({})
         hydrate_module_additional_settings(module, module_cfg)
         module.register(clients=clients, config=config)
 

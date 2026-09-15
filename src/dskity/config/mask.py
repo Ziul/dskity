@@ -1,9 +1,9 @@
-"""Mask sensitive values in configuration dictionaries."""
-
 from __future__ import annotations
 
 import re
 from typing import Any
+
+from pydantic import SecretStr
 
 # Keys whose values should always be masked (case-insensitive, underscore-stripped)
 SENSITIVE_KEYS = frozenset({
@@ -44,6 +44,11 @@ def mask_secrets(data: Any) -> Any:
 
 def _mask_value(key: str, value: Any) -> Any:
     """Decide whether to mask a value based on its key and content."""
+    # Handle SecretStr objects by extracting their display value
+    if isinstance(value, SecretStr):
+        # SecretStr's _display() method returns '**********' for non-empty values
+        return value._display()
+    
     key_lower = key.lower().replace("_", "").replace("-", "")
 
     if key_lower in SENSITIVE_KEYS:

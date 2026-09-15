@@ -49,7 +49,23 @@ class ModuleRegistry:
         for module in self.modules:
             # New pattern: modules.<name>.enabled
             module_cfg = modules_cfg.get(module.meta.name)
-            enabled = bool(getattr(module_cfg, "enabled", True))
+            # Module is disabled by default if not configured
+            enabled = bool(getattr(module_cfg, "enabled", False))
 
             if enabled:
                 yield module
+
+    def enabled_core_modules(self, config: DSkitySettings) -> Iterable[Module]:
+        """Get enabled core modules (kvstore).
+        
+        Core modules are controlled by common.registry.enabled setting.
+        If common.registry.enabled=true, kvstore module is enabled.
+        """
+        registry_cfg = config.common.registry
+
+        for module in self.modules:
+            # Only kvstore is a core module for now, controlled by common.registry.enabled
+            if module.meta.name == "kvstore":
+                enabled = bool(getattr(registry_cfg, "enabled", True))
+                if enabled:
+                    yield module

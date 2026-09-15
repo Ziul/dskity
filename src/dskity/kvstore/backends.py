@@ -119,18 +119,28 @@ class RedisKVBackend(KVBackend):
         kv_cfg = config.kv
         redis_cfg = kv_cfg.redis
 
+        # Extract actual values if they're SecretStr
+        url_value = redis_cfg.url
+        if hasattr(url_value, 'get_secret_value'):
+            url_value = url_value.get_secret_value()
+        
+        username_value = redis_cfg.username
+        password_value = redis_cfg.password
+        if hasattr(password_value, 'get_secret_value'):
+            password_value = password_value.get_secret_value()
+
         url = (
             os.getenv("DSKITY_REDIS_URL")
             or os.getenv("REDIS_URL")
-            or redis_cfg.url
+            or url_value
             or "redis://127.0.0.1:6379/0"
         )
 
         username = os.getenv("DSKITY_REDIS_USERNAME") or (
-            redis_cfg.username
+            username_value
         )
         password = os.getenv("DSKITY_REDIS_PASSWORD") or (
-            redis_cfg.password
+            password_value
         )
         key_prefix = cls._normalize_prefix(str(redis_cfg.key_prefix or ""))
 
@@ -226,17 +236,26 @@ class ConsulKVBackend(KVBackend):
         kv_cfg = config.kv
         consul_cfg = kv_cfg.consul
 
+        # Extract actual values if they're SecretStr
+        url_value = consul_cfg.url
+        if hasattr(url_value, 'get_secret_value'):
+            url_value = url_value.get_secret_value()
+        
+        token_value = consul_cfg.token
+        if hasattr(token_value, 'get_secret_value'):
+            token_value = token_value.get_secret_value()
+
         url = (
             os.getenv("DSKITY_CONSUL_URL")
             or os.getenv("CONSUL_HTTP_ADDR")
-            or consul_cfg.url
+            or url_value
             or "http://127.0.0.1:8500"
         )
 
         token = (
             os.getenv("DSKITY_CONSUL_TOKEN")
             or os.getenv("CONSUL_HTTP_TOKEN")
-            or consul_cfg.token
+            or token_value
         )
 
         dc = os.getenv("DSKITY_CONSUL_DC") or consul_cfg.dc

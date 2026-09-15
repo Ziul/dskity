@@ -151,19 +151,37 @@ def validate_config(
         if not packages:
             packages = ["dskity.modules"]
 
-        discovered: dict[str, Any] = {}
-        load_errors: list[str] = []
+        # Discover CORE modules (from dskity.modules)
+        core_discovered: dict[str, Any] = {}
+        core_load_errors: list[str] = []
+        try:
+            reg = ModuleRegistry.from_package("dskity.modules")
+            for mod in reg.modules:
+                core_discovered[mod.meta.name] = mod
+        except ModuleNotFoundError:
+            pass
+        except Exception as exc:
+            core_load_errors.append(f"Core modules package 'dskity.modules' failed to load: {exc}")
+
+        # Discover USER modules (from other packages)
+        user_discovered: dict[str, Any] = {}
+        user_load_errors: list[str] = []
         for pkg in packages:
+            if pkg == "dskity.modules":
+                continue
             try:
                 reg = ModuleRegistry.from_package(pkg)
             except ModuleNotFoundError as exc:
-                load_errors.append(f"Package '{pkg}' not found: {exc}")
+                user_load_errors.append(f"Package '{pkg}' not found: {exc}")
                 continue
             except Exception as exc:
-                load_errors.append(f"Package '{pkg}' failed to load: {exc}")
+                user_load_errors.append(f"Package '{pkg}' failed to load: {exc}")
                 continue
             for mod in reg.modules:
-                discovered.setdefault(mod.meta.name, mod)
+                user_discovered.setdefault(mod.meta.name, mod)
+
+        discovered = {**core_discovered, **user_discovered}
+        load_errors = core_load_errors + user_load_errors
 
         if load_errors:
             for msg in load_errors:
@@ -192,10 +210,20 @@ def validate_config(
 
     # ── Step 4: Module config validation ─────────────────────────────────
     try:
+        # Create registries for enabled status checking
+        core_registry = ModuleRegistry(modules=tuple(core_discovered.values()))
+        user_registry = ModuleRegistry(modules=tuple(user_discovered.values()))
+
         for name, mod in discovered.items():
-            cfg = config.modules.ensure(name)
-            enabled = getattr(cfg, "enabled", True)
-            if enabled:
+            # Determine if module is enabled (different logic for core vs user)
+            if name in core_discovered:
+                # Core modules are controlled by common.registry.enabled
+                is_enabled = any(m.meta.name == name for m in core_registry.enabled_core_modules(config))
+            else:
+                # User modules are disabled by default (via modules.<name>.enabled)
+                is_enabled = any(m.meta.name == name for m in user_registry.enabled_modules(config))
+
+            if is_enabled:
                 report.add(
                     f"modules.config.{name}",
                     CheckStatus.OK,

@@ -19,7 +19,7 @@ import json
 import os
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, SecretStr
 from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -36,11 +36,11 @@ class MQTTSettings(BaseModel):
     """MQTT transport settings (common.mqtt.*)"""
 
     enabled: bool = False
-    broker: str = "mqtt://localhost"
+    broker: SecretStr = SecretStr("mqtt://localhost")
     port: int = 1883
     client_id: str = "dskity-client"
     username: str | None = None
-    password: str | None = None
+    password: SecretStr | None = None
     keepalive: int = 60
     reconnect_interval_seconds: int = 10
     protocol: str = "5.0"
@@ -94,7 +94,7 @@ class AdminSettings(BaseModel):
         default=True,
         description="Mask sensitive values in config output.",
     )
-    token: str | None = Field(
+    token: SecretStr | None = Field(
         default=None,
         description="If set, /_core/* endpoints require X-Admin-Token header.",
     )
@@ -187,17 +187,17 @@ class CommonSettings(BaseModel):
 class RedisSettings(BaseModel):
     """Redis settings (kv.redis.*)"""
 
-    url: str = "redis://127.0.0.1:6379/0"
+    url: SecretStr = SecretStr("redis://127.0.0.1:6379/0")
     username: str | None = None
-    password: str | None = None
+    password: SecretStr | None = None
     key_prefix: str = "dskity"
 
 
 class ConsulSettings(BaseModel):
     """Consul settings (kv.consul.*)"""
 
-    url: str = "http://127.0.0.1:8500"
-    token: str | None = None
+    url: SecretStr = SecretStr("http://127.0.0.1:8500")
+    token: SecretStr | None = None
     dc: str | None = None
     verify: bool = True
     key_prefix: str = "dskity"
@@ -222,7 +222,7 @@ class KvSettings(BaseModel):
 class ModuleDatabaseSettings(BaseModel):
     """Generic module database settings"""
 
-    url: str = Field(
+    url: SecretStr = Field(
         default_factory=lambda: os.getenv("DSKITY_DB_URI", "sqlite:///:memory:")
     )
     pool_size: int = 10
@@ -234,7 +234,7 @@ class ModuleSettings(BaseModel):
     """Settings for an individual module"""
 
     __name__: str | None = None  # Module name (e.g. "echo", "person")
-    enabled: bool = True
+    enabled: bool = False
     url: str | None = None
     headers: dict[str, str] | None = None
     database: ModuleDatabaseSettings | None = None
@@ -273,7 +273,7 @@ class ModulesSettings(BaseModel):
         else:
             return value
 
-        data.setdefault("kvstore", {"enabled": True})
+        data.setdefault("kvstore", {"enabled": False})
         return data
 
     @staticmethod
@@ -293,7 +293,7 @@ class ModulesSettings(BaseModel):
         extra = getattr(self, "__pydantic_extra__", {}) or {}
         module = self._as_module(name, extra.get(name))
         if not isinstance(module, ModuleSettings):
-            module = ModuleSettings.model_validate({"enabled": True})
+            module = ModuleSettings.model_validate({"enabled": False})
             module.__name__ = name
         extra[name] = module
         return module
@@ -335,7 +335,17 @@ def hydrate_module_additional_settings(module: Any, module_settings: ModuleSetti
 
     current = module_settings.additional_settings
     if current is None:
-        module_settings.additional_settings = model_type()
+        # Only instantiate the model if the module is actually enabled in config.
+        # If not explicitly configured, leave additional_settings as None to avoid
+        # ValidationError for models with required fields.
+        if not module_settings.enabled:
+            return module_settings
+        try:
+            module_settings.additional_settings = model_type()
+        except Exception:
+            # If the model has required fields with no defaults, leave as None
+            # rather than failing module bootstrap
+            pass
         return module_settings
 
     if isinstance(current, model_type):

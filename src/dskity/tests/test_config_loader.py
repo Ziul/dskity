@@ -129,6 +129,9 @@ modules:
 
     cfg = load_config()
 
-    assert cfg.modules.orders.database.url == (
+    actual_url = cfg.modules.orders.database.url
+    if hasattr(actual_url, 'get_secret_value'):
+        actual_url = actual_url.get_secret_value()
+    assert actual_url == (
         "postgresql://app_user:app_password@db.example.com:5432/my_database"
     )

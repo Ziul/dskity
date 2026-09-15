@@ -203,8 +203,12 @@ class MQTTClient:
 
                 # Set credentials if provided
                 if self.config.username and self.config.password:
+                    # Extract the actual password value if it's a SecretStr
+                    password = self.config.password
+                    if hasattr(password, 'get_secret_value'):
+                        password = password.get_secret_value()
                     self.client.username_pw_set(
-                        self.config.username, self.config.password
+                        self.config.username, password
                     )
 
                 # Configure TLS/SSL if enabled
@@ -231,6 +235,8 @@ class MQTTClient:
                 # Connect to broker
                 # Extract hostname from broker URL (mqtt://host or mqtt+tls://host)
                 broker_url = self.config.broker
+                if hasattr(broker_url, 'get_secret_value'):
+                    broker_url = broker_url.get_secret_value()
                 if "://" in broker_url:
                     broker_host = broker_url.split("://", maxsplit=1)[1]
                 else:

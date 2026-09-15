@@ -23,7 +23,11 @@ def verify_admin_access(request: Request) -> None:
 
     if admin.token:
         provided = request.headers.get("x-admin-token")
-        if provided != admin.token:
+        # Extract the actual token value if it's a SecretStr
+        token = admin.token
+        if hasattr(token, 'get_secret_value'):
+            token = token.get_secret_value()
+        if provided != token:
             raise HTTPException(status_code=403, detail="Invalid admin token")
 
 
@@ -174,7 +178,7 @@ def config_html(request: Request) -> HTMLResponse:
             status_code=404,
         )
 
-    config_dict = config.model_dump(exclude_none=True)
+    config_dict = config.model_dump(mode='json', exclude_none=True)
     if admin.mask_secrets:
         config_dict = mask_secrets(config_dict)
 
@@ -257,7 +261,8 @@ def config_json(request: Request) -> dict:
     if not admin.show_config:
         raise HTTPException(status_code=404, detail="Config endpoint is disabled")
 
-    data = config.model_dump(exclude_none=True)
+    # Use mode='json' to respect SecretStr serialization (which returns '**********')
+    data = config.model_dump(mode='json', exclude_none=True)
     if admin.mask_secrets:
         data = mask_secrets(data)
     return data

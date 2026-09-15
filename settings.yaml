@@ -5,8 +5,7 @@ name: DSKity
 reload: null
 
 modules_search_paths:
-  - dskity.modules
-  - modules
+  # - dskity.modules
   - examples.modules
 
 common:
@@ -41,6 +40,11 @@ common:
 modules:
   health:
     enabled: true
+  examples:
+    enabled: true
+    database:
+      # url: "postgresql+psycopg2://biostation:biostation@127.0.0.1:5432/biostation_person"
+      url: "sqlite:///examples.db"
   external:
-    enabled: false
+    enabled: true
     url: "https://my-dns/external-module"
