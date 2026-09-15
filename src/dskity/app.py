@@ -3,7 +3,6 @@ from __future__ import annotations
 import logging
 from fastapi import FastAPI
 from fastapi.openapi.utils import get_openapi
-from fastapi.security import HTTPBearer, HTTPAuthCredentials
 
 from dskity.bootstrap import bootstrap
 from dskity.logging import configure_logging
