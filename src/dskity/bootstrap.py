@@ -266,6 +266,7 @@ def bootstrap(app: FastAPI) -> None:
             allow_methods=cors.allow_methods,
             allow_headers=cors.allow_headers,
             allow_credentials=cors.allow_credentials,
+            allow_origin_regex=cors.allow_origin_regex,
             max_age=cors.max_age,
         )
         logger.debug("CORS middleware enabled with origins: %s", cors.allow_origins)

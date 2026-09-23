@@ -56,6 +56,7 @@ class CorsSettings(BaseModel):
     allow_origins: list[str] = Field(default_factory=lambda: ["*"])
     allow_methods: list[str] = Field(default_factory=lambda: ["*"])
     allow_headers: list[str] = Field(default_factory=lambda: ["*"])
+    allow_origin_regex: str | None = None
     allow_credentials: bool = False
     max_age: int = 600
 
