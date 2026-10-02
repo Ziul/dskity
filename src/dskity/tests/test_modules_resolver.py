@@ -112,14 +112,17 @@ def test_modules_resolver_get_is_stochastic_but_returns_valid_instance() -> None
 def test_modules_resolver_fallback_prefers_runtime_state_over_env(monkeypatch: pytest.MonkeyPatch) -> None:
     app = FastAPI()
     app.state.config = {}
-    app.state.runtime_host = "127.0.0.1"
+    # A concrete, routable runtime host (not loopback/wildcard) must be
+    # trusted as-is and take precedence over the DSKITY_HOST/DSKITY_PORT
+    # env vars.
+    app.state.runtime_host = "10.2.3.4"
     app.state.runtime_port = 9123
 
     monkeypatch.setenv("DSKITY_HOST", "10.1.1.10")
     monkeypatch.setenv("DSKITY_PORT", "4555")
 
     resolver = ModulesResolver(app)
-    assert resolver.urls("echo") == ["http://127.0.0.1:9123"]
+    assert resolver.urls("echo") == ["http://10.2.3.4:9123"]
 
 
 def test_modules_resolver_prefers_dskity_settings_module_url_as_first_priority() -> None:

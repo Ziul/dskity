@@ -172,7 +172,11 @@ class CommonSettings(BaseModel):
     """Common settings (common.*)"""
 
     internal_base_url: str = "http://127.0.0.1:8000"
-    advertise_url: str = "http://127.0.0.1:8000"
+    # Empty by default: when unset, the instance auto-detects its own
+    # routable IP (see dskity.network.get_local_ip) instead of advertising
+    # a fixed address. This is required for multi-replica deployments
+    # (e.g. Kubernetes), where each pod/instance has a different IP.
+    advertise_url: str = ""
     registry: RegistrySettings = Field(default_factory=RegistrySettings)
     mqtt: MQTTSettings = Field(default_factory=MQTTSettings)
     cors: CorsSettings = Field(default_factory=CorsSettings)

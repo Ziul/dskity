@@ -6,6 +6,7 @@ from dataclasses import dataclass
 
 from fastapi import FastAPI
 
+from dskity.network import get_current_host_port
 from dskity.registry.service_registry import ServiceRegistry
 
 
@@ -25,12 +26,18 @@ def start_heartbeat(app: FastAPI, *, cfg: HeartbeatConfig) -> None:
 
     async def loop() -> None:
         reg = ServiceRegistry(store=app.state.registry_store)
-        # Try to use advertise_url if explicitly configured
-        advertise_url = str(getattr(app.state, "advertise_url", None))
-
-        # If there's no advertise_url, the per-request middleware will handle registration
+        # Prefer an explicitly configured advertise_url; otherwise fall back
+        # to the auto-detected host (same resolution chain used elsewhere:
+        # cached app.state.local_ip -> get_local_ip()) combined with the
+        # configured/listening port. Without this fallback, instances that
+        # never happen to receive an inbound request (e.g. idle replicas
+        # behind a Service, with no traffic routed to them yet) would never
+        # be proactively registered, making them invisible to other
+        # replicas doing service discovery even though they're healthy.
+        advertise_url = getattr(app.state, "advertise_url", None)
         if not advertise_url:
-            return
+            host, port = get_current_host_port(app)
+            advertise_url = f"http://{host}:{port}"
 
         while True:
             now = int(time.time())

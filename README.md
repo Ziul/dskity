@@ -130,6 +130,29 @@ common:
 
 Heartbeats keep entries alive; graceful deregistration happens automatically on shutdown.
 
+#### Advertised address in multi-replica deployments (Kubernetes, etc.)
+
+Each instance advertises a `base_url` under `/_core/services/<service>.json` so
+other instances can discover it. By default (`common.advertise_url: ""`),
+dskity auto-detects a routable IP per instance — important because `--host
+0.0.0.0` (the usual bind address in containers) is **not** a valid address to
+advertise to other services.
+
+If auto-detection still can't find a real IP in your environment (e.g. a CNI
+that blocks the UDP "connect" trick used to probe the route table), set the
+pod IP explicitly via the Kubernetes Downward API:
+
+```yaml
+env:
+  - name: DSKITY_ADVERTISE_HOST
+    valueFrom:
+      fieldRef:
+        fieldPath: status.podIP
+```
+
+Only set `common.advertise_url` explicitly when all instances should be
+reached through a single stable address (e.g. behind a Service/Ingress).
+
 ### CORS
 ```yaml
 common:
@@ -239,7 +262,12 @@ modules_search_paths:
 
 common:
   internal_base_url: http://127.0.0.1:8000
-  advertise_url: http://127.0.0.1:8000
+  # Leave empty (default) to auto-detect this instance's routable IP at
+  # runtime — required for multi-replica deployments (Kubernetes, etc.),
+  # where each pod has a different IP. Only set this explicitly for
+  # single-instance/local setups or when fronted by a fixed, stable URL
+  # (e.g. a load balancer or Ingress hostname).
+  advertise_url: ""
 
   registry:
     enabled: true

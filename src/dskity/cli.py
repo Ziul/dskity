@@ -363,11 +363,25 @@ def _cmd_run(options: RunOptions) -> int:
     port = options.port or 8000
     if options.advertise_url:
         advertise_url = options.advertise_url
-    else:
+    elif host.strip() not in {"0.0.0.0", "::", "[::]"}:
+        # host is a concrete, routable address (e.g. explicitly bound to a
+        # specific interface) — safe to use as-is for discovery.
         advertise_url = f"http://{host}:{port}"
+    else:
+        # host is a bind-all wildcard address (typical for containers/k8s,
+        # where --host 0.0.0.0 is required to accept traffic on any
+        # interface). Advertising "0.0.0.0" to other services is useless,
+        # so leave advertise_url unset here and let bootstrap/network.py
+        # auto-detect a real routable IP per-instance (see get_local_ip()).
+        advertise_url = None
+
     # Preferred key for pydantic nested settings + legacy key for compatibility.
-    os.environ["DSKITY_COMMON__ADVERTISE_URL"] = advertise_url
-    os.environ["DSKITY_ADVERTISE_URL"] = advertise_url
+    if advertise_url:
+        os.environ["DSKITY_COMMON__ADVERTISE_URL"] = advertise_url
+        os.environ["DSKITY_ADVERTISE_URL"] = advertise_url
+    else:
+        os.environ.pop("DSKITY_COMMON__ADVERTISE_URL", None)
+        os.environ.pop("DSKITY_ADVERTISE_URL", None)
 
     os.environ["DSKITY_PORT"] = str(port)
     os.environ["DSKITY_HOST"] = host

@@ -71,6 +71,44 @@ class Module(Protocol):
     async def on_shutdown(self, clients: TransportClients) -> None: ...
 
 
+def _iter_effective_api_routes(app: FastAPI) -> list[tuple[str, list[str], set[str]]]:
+    """Yield (path, tags, methods) for every `APIRoute` registered on `app`.
+
+    Newer FastAPI/Starlette releases (FastAPI >= ~0.142, Starlette >= ~1.7)
+    include sub-routers "lazily": `app.router.routes` ends up containing
+    internal `_IncludedRouter` wrapper objects instead of flattened
+    `APIRoute`s, and the effective (prefixed) path/methods/tags for a route
+    are only resolved on demand. `fastapi.routing.iter_route_contexts` is the
+    same helper FastAPI's own OpenAPI generator uses to flatten these
+    wrappers, so we reuse it here when available and fall back to the
+    historical flat-list behavior on older FastAPI versions that don't have
+    it (and therefore never wrap routes in the first place).
+    """
+
+    try:
+        from fastapi.routing import iter_route_contexts
+    except ImportError:
+        iter_route_contexts = None
+
+    if iter_route_contexts is None:
+        return [
+            (route.path, list(route.tags or []), set(route.methods or set()))
+            for route in app.router.routes
+            if isinstance(route, APIRoute)
+        ]
+
+    results: list[tuple[str, list[str], set[str]]] = []
+    for route_context in iter_route_contexts(app.router.routes):
+        original_route = route_context.original_route
+        if not isinstance(original_route, APIRoute):
+            continue
+        path = route_context.path or original_route.path
+        tags = list(getattr(route_context, "tags", None) or original_route.tags or [])
+        methods = set(getattr(route_context, "methods", None) or original_route.methods or set())
+        results.append((path, tags, methods))
+    return results
+
+
 @dataclass(frozen=True)
 class _RouteSpec:
     name: str
@@ -91,21 +129,18 @@ class _ModuleHttpClient:
         used_names: set[str] = set()
         method_priority = ["GET", "POST", "PUT", "PATCH", "DELETE"]
 
-        for route in app.router.routes:
-            if not isinstance(route, APIRoute):
-                continue
-            tags = route.tags or []
+        for path, tags, route_methods in _iter_effective_api_routes(app):
             if meta.name not in tags:
                 continue
 
-            if not route.path.startswith(meta.base_path):
+            if not path.startswith(meta.base_path):
                 continue
 
-            relative_path = route.path[len(meta.base_path) :] or "/"
+            relative_path = path[len(meta.base_path) :] or "/"
             if not relative_path.startswith("/"):
                 relative_path = "/" + relative_path
 
-            methods = [m for m in (route.methods or set()) if m not in {"HEAD", "OPTIONS"}]
+            methods = [m for m in route_methods if m not in {"HEAD", "OPTIONS"}]
             if not methods:
                 continue
 
