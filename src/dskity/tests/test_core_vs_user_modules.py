@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-
 from dskity.config.settings import DSkitySettings
 from dskity.modules.registry import ModuleRegistry
 

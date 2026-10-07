@@ -1,16 +1,15 @@
 from __future__ import annotations
 
-from fastapi import FastAPI
 import pytest
+from fastapi import FastAPI
 
+import dskity.registry.service_registry as service_registry_mod
 from dskity.config.settings import DSkitySettings
 from dskity.kvstore.backends import InMemoryKVBackend
 from dskity.modules.modules_resolver import ModulesResolver
 from dskity.registry.middleware import EnabledModuleInfo
 from dskity.registry.service_registry import ServiceRegistry
 from dskity.registry.store import RegistryStore
-
-import dskity.registry.service_registry as service_registry_mod
 
 
 def test_modules_resolver_fallback_uses_internal_base_url_and_base_path() -> None:

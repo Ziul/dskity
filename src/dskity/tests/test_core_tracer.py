@@ -1,24 +1,24 @@
 """Tests for OpenTelemetry tracer initialization and middleware."""
 from __future__ import annotations
 
-from unittest.mock import patch, Mock
-import pytest
+from unittest.mock import Mock, patch
 
+import pytest
 from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 from opentelemetry import trace
 
-from dskity.config.settings import DSkitySettings, OtelSettings, CommonSettings
+from dskity.config.settings import CommonSettings, DSkitySettings, OtelSettings
+from dskity.request_id import install_request_id
 from dskity.tracer import (
+    add_span_attributes,
+    get_trace_module_name,
+    get_trace_request_id,
     initialize_tracer,
     install_trace_middleware,
-    get_trace_request_id,
-    set_trace_request_id,
-    get_trace_module_name,
     set_trace_module_name,
-    add_span_attributes,
+    set_trace_request_id,
 )
-from dskity.request_id import install_request_id
 
 
 class FakeModule:
@@ -97,14 +97,16 @@ def test_initialize_tracer_sets_global_provider() -> None:
     common_config = CommonSettings(otel=otel_config)
     config = DSkitySettings(name="test-app", common=common_config)
     
-    with patch("dskity.tracer.OTLPSpanExporter"):
-        with patch("dskity.tracer.version", return_value="1.0.0"):
-            # Should not raise an exception
-            initialize_tracer(config)
-            
-            # Provider should exist
-            provider = trace.get_tracer_provider()
-            assert provider is not None
+    with (
+        patch("dskity.tracer.OTLPSpanExporter"),
+        patch("dskity.tracer.version", return_value="1.0.0"),
+    ):
+        # Should not raise an exception
+        initialize_tracer(config)
+        
+        # Provider should exist
+        provider = trace.get_tracer_provider()
+        assert provider is not None
 
 
 def test_middleware_captures_request_id_from_context() -> None:
@@ -224,7 +226,9 @@ def test_metrics_url_excluded_from_tracing() -> None:
     from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
     from opentelemetry.sdk.trace import TracerProvider
     from opentelemetry.sdk.trace.export import SimpleSpanProcessor
-    from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
+    from opentelemetry.sdk.trace.export.in_memory_span_exporter import (
+        InMemorySpanExporter,
+    )
 
     exporter = InMemorySpanExporter()
     provider = TracerProvider()
@@ -363,16 +367,18 @@ def test_initialize_tracer_uses_service_name_from_config() -> None:
     common_config = CommonSettings(otel=otel_config)
     config = DSkitySettings(name="my-app", common=common_config)
     
-    with patch("dskity.tracer.OTLPSpanExporter"):
-        with patch("dskity.tracer.version", return_value="1.0.0"):
-            with patch("dskity.tracer.TracerProvider") as mock_provider_class:
-                initialize_tracer(config)
-                
-                # Get the Resource that was passed to TracerProvider
-                mock_provider_class.assert_called_once()
-                resource = mock_provider_class.call_args[1]["resource"]
-                
-                assert resource.attributes["service.name"] == "my-app"
+    with (
+        patch("dskity.tracer.OTLPSpanExporter"),
+        patch("dskity.tracer.version", return_value="1.0.0"),
+        patch("dskity.tracer.TracerProvider") as mock_provider_class,
+    ):
+        initialize_tracer(config)
+        
+        # Get the Resource that was passed to TracerProvider
+        mock_provider_class.assert_called_once()
+        resource = mock_provider_class.call_args[1]["resource"]
+        
+        assert resource.attributes["service.name"] == "my-app"
 
 
 def test_initialize_tracer_uses_otel_service_name_when_set() -> None:
@@ -386,13 +392,15 @@ def test_initialize_tracer_uses_otel_service_name_when_set() -> None:
     common_config = CommonSettings(otel=otel_config)
     config = DSkitySettings(name="my-app", common=common_config)
     
-    with patch("dskity.tracer.OTLPSpanExporter"):
-        with patch("dskity.tracer.version", return_value="1.0.0"):
-            with patch("dskity.tracer.TracerProvider") as mock_provider_class:
-                initialize_tracer(config)
-                
-                resource = mock_provider_class.call_args[1]["resource"]
-                assert resource.attributes["service.name"] == "custom-service"
+    with (
+        patch("dskity.tracer.OTLPSpanExporter"),
+        patch("dskity.tracer.version", return_value="1.0.0"),
+        patch("dskity.tracer.TracerProvider") as mock_provider_class,
+    ):
+        initialize_tracer(config)
+        
+        resource = mock_provider_class.call_args[1]["resource"]
+        assert resource.attributes["service.name"] == "custom-service"
 
 
 def test_add_span_attributes_skips_none_values() -> None:

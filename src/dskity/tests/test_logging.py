@@ -5,8 +5,13 @@ import logging
 import re
 from io import StringIO
 
-
-from dskity.logging import JsonFormatter, LogfmtFormatter, RequestIdFilter, build_logging_config, configure_logging
+from dskity.logging import (
+    JsonFormatter,
+    LogfmtFormatter,
+    RequestIdFilter,
+    build_logging_config,
+    configure_logging,
+)
 from dskity.request_id import _request_id_ctx
 
 
@@ -431,7 +436,7 @@ class TestLoggingWithRequestId:
             _request_id_ctx.reset(token)
 
         assert result is True
-        assert getattr(record, "request_id") == "req-test-123"
+        assert record.request_id == "req-test-123"
 
     def test_request_id_filter_uses_dash_when_no_request_id(self) -> None:
         """Verify RequestIdFilter uses '-' when no request_id is set."""
@@ -449,7 +454,7 @@ class TestLoggingWithRequestId:
         result = filter_obj.filter(record)
 
         assert result is True
-        assert getattr(record, "request_id") == "-"
+        assert record.request_id == "-"
 
     def test_json_log_output_with_request_id_filter(self) -> None:
         """Test complete JSON logging pipeline with request_id."""

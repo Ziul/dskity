@@ -101,7 +101,7 @@ def validate_config(
 
     # ── Step 1: Locate and parse the config file ──────────────────────────
     try:
-        from dskity.config.loader import resolve_config_path, _read_config_file
+        from dskity.config.loader import _read_config_file, resolve_config_path
 
         resolved = resolve_config_path(config_path)
         _ = _read_config_file(resolved, optional=False)
@@ -138,9 +138,9 @@ def validate_config(
     # ── Step 3: Module discovery ──────────────────────────────────────────
     try:
         from dskity.bootstrap import (
+            _install_modules_search_paths,
             _resolve_modules_import_packages,
             _resolve_modules_search_paths,
-            _install_modules_search_paths,
         )
         from dskity.modules.registry import ModuleRegistry
 

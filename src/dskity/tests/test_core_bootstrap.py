@@ -6,15 +6,15 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 from pydantic import BaseModel, Field
 
-from dskity.config.settings import DSkitySettings
-from dskity.modules.registry import ModuleRegistry
 import dskity.bootstrap as bootstrap_mod
+from dskity.app import create_app
 from dskity.bootstrap import (
     _install_modules_search_paths,
     _resolve_modules_import_packages,
     _resolve_modules_search_paths,
 )
-from dskity.app import create_app
+from dskity.config.settings import DSkitySettings
+from dskity.modules.registry import ModuleRegistry
 
 
 class HealthAdditionalSettings(BaseModel):
@@ -28,7 +28,7 @@ class FakeModuleWithAdditionalSettings:
     def additional_settings_model(self):
         return HealthAdditionalSettings
 
-    def register(self, clients, config):  # noqa: ANN001
+    def register(self, clients, config):
         return None
 
 
@@ -36,12 +36,14 @@ class FakeModuleWithoutAdditionalSettings:
     def __init__(self, name: str, base_path: str) -> None:
         self.meta = type("Meta", (), {"name": name, "base_path": base_path})()
 
-    def register(self, clients, config):  # noqa: ANN001
+    def register(self, clients, config):
         return None
 
 
 def test_bootstrap_exposes_root_metrics_and_request_id_and_service_name() -> None:
     app = create_app()
+    assert app._telemetry["auto_configure"] is False
+
     client = TestClient(app)
 
     r_root = client.get("/")
@@ -134,7 +136,7 @@ def test_bootstrap_logs_loaded_modules(caplog, monkeypatch) -> None:
         def __init__(self, name: str, base_path: str) -> None:
             self.meta = type("Meta", (), {"name": name, "base_path": base_path})()
 
-        def register(self, clients, config):  # noqa: ANN001
+        def register(self, clients, config):
             return None
 
     fake_registry = ModuleRegistry(
@@ -160,7 +162,7 @@ def test_bootstrap_logs_loaded_modules(caplog, monkeypatch) -> None:
 
     logged_messages: list[str] = []
 
-    def fake_info(message: str, *args, **kwargs) -> None:  # noqa: ANN001
+    def fake_info(message: str, *args, **kwargs) -> None:
         logged_messages.append(message % args if args else message)
 
     monkeypatch.setattr(bootstrap_mod.logger, "info", fake_info)

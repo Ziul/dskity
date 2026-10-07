@@ -9,8 +9,8 @@ import fastapi.routing
 from fastapi import FastAPI
 
 from dskity.config.settings import DSkitySettings
-from dskity.registry.service_registry import ServiceRegistry
 from dskity.network import get_current_host_port
+from dskity.registry.service_registry import ServiceRegistry
 
 
 def _join_url(base_url: str, route: str) -> str:
@@ -173,9 +173,8 @@ class ModulesResolver:
         for route in self.app.router.routes:
             if isinstance(
                 route, (fastapi.routing.APIRoute, fastapi.routing.APIWebSocketRoute)
-            ):
-                if route.tags and service in route.tags:
-                    results.append(route.path)
+            ) and route.tags and service in route.tags:
+                results.append(route.path)
         return results
 
     def base_path(self, service: str) -> str:
@@ -243,7 +242,7 @@ class ModulesResolver:
                         timeout=timeout,
                     )
                     return urls
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     _logger.warning(
                         "Resolver timeout for service '%s' (attempt %d/%d)",
                         service, attempt + 1, max_retries,

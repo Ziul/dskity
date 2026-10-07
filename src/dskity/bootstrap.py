@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import logging
 import os
 import sys
-import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
@@ -10,31 +10,41 @@ from uuid import uuid4
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-
-from dskity.config.loader import load_config
-from dskity.config.settings import DSkitySettings, hydrate_module_additional_settings, ModuleSettings
-from dskity.errors import install_error_handlers
-from dskity.health import install_health_checks
-from dskity.tracer import initialize_tracer, install_trace_middleware, initialize_instrumentation
 from opentelemetry import trace
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
-from dskity.kvstore.backends import backend_from_config, generate_node_id
-from dskity.security_headers import SecurityHeadersMiddleware
-from dskity.transport.http_client import HttpClientManager
+
+from dskity.config.loader import load_config
+from dskity.config.settings import (
+    DSkitySettings,
+    ModuleSettings,
+    hydrate_module_additional_settings,
+)
+from dskity.errors import install_error_handlers
 from dskity.events import EventBus
+from dskity.health import install_health_checks
+from dskity.kvstore.backends import backend_from_config, generate_node_id
 from dskity.metrics import install_metrics
-from dskity.modules.registry import ModuleRegistry
 from dskity.modules.contracts import TransportClients
-from dskity.transport.mqtt import get_mqtt_client, shutdown_mqtt_client
-from dskity.transport.grpc import GRPCClient
 from dskity.modules.modules_resolver import ModulesResolver
+from dskity.modules.registry import ModuleRegistry
 from dskity.network import update_runtime_host_port
-from dskity.request_id import install_request_id
 from dskity.registry.api import router as registry_router
 from dskity.registry.heartbeat import HeartbeatConfig, start_heartbeat, stop_heartbeat
-from dskity.registry.middleware import EnabledModuleInfo, RegistryAdvertiseASGIMiddleware
+from dskity.registry.middleware import (
+    EnabledModuleInfo,
+    RegistryAdvertiseASGIMiddleware,
+)
 from dskity.registry.store import RegistryStore
-
+from dskity.request_id import install_request_id
+from dskity.security_headers import SecurityHeadersMiddleware
+from dskity.tracer import (
+    initialize_instrumentation,
+    initialize_tracer,
+    install_trace_middleware,
+)
+from dskity.transport.grpc import GRPCClient
+from dskity.transport.http_client import HttpClientManager
+from dskity.transport.mqtt import get_mqtt_client, shutdown_mqtt_client
 
 logger = logging.getLogger(__name__)
 
@@ -497,9 +507,9 @@ def bootstrap(app: FastAPI) -> None:
 
     # Create an object grouping transport clients available to modules.
     # Ensure an in-process EventBus exists early so modules can use it during register().
-    if not hasattr(app.state, "event_bus") or getattr(app.state, "event_bus") is None:
+    if not hasattr(app.state, "event_bus") or app.state.event_bus is None:
         app.state.event_bus = EventBus()
-    _event_bus_early = getattr(app.state, "event_bus")
+    _event_bus_early = app.state.event_bus
 
     # Note: mqtt_client will be initialized in lifespan, so use getattr for safety
     mqtt_client = getattr(app.state, "mqtt_client", None)
@@ -599,11 +609,10 @@ def bootstrap(app: FastAPI) -> None:
                         _mod.meta.name,
                         _time.monotonic() - _t0,
                     )
-                except Exception as _exc:
+                except Exception:
                     logger.exception(
-                        "on_startup(%s) raised an error (continuing): %s",
+                        "on_startup(%s) raised an error (continuing)",
                         _mod.meta.name,
-                        _exc,
                     )
 
         try:
@@ -635,11 +644,10 @@ def bootstrap(app: FastAPI) -> None:
                             _mod.meta.name,
                             _time.monotonic() - _t0,
                         )
-                    except Exception as _exc:
+                    except Exception:
                         logger.exception(
-                            "on_shutdown(%s) raised an error (continuing): %s",
+                            "on_shutdown(%s) raised an error (continuing)",
                             _mod.meta.name,
-                            _exc,
                         )
 
             # Shutdown MQTT last

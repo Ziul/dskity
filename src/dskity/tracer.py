@@ -6,14 +6,13 @@ from logging import getLogger
 
 from fastapi import FastAPI, Request
 from opentelemetry import trace
+from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
 from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
-from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
 
 from dskity.config.settings import DSkitySettings
-
 
 # Context variables for tracing attributes
 _request_id_ctx: ContextVar[str | None] = ContextVar("trace_request_id", default=None)
@@ -122,9 +121,13 @@ def install_request_id_middleware(app: FastAPI) -> None:
         if path_parts and path_parts[0] in enabled_module_names:
             module_name = path_parts[0]
         # Try second part if first is 'api'
-        elif path_parts and path_parts[0] == "api" and len(path_parts) > 1:
-            if path_parts[1] in enabled_module_names:
-                module_name = path_parts[1]
+        elif (
+            path_parts
+            and path_parts[0] == "api"
+            and len(path_parts) > 1
+            and path_parts[1] in enabled_module_names
+        ):
+            module_name = path_parts[1]
         
         set_trace_module_name(module_name)
         

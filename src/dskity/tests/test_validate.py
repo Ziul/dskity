@@ -6,14 +6,12 @@ import json
 import textwrap
 from pathlib import Path
 
-
 from dskity.validate import (
     CheckStatus,
     ValidationReport,
     ValidationResult,
     validate_config,
 )
-
 
 # ── ValidationResult ──────────────────────────────────────────────────────────
 
@@ -182,7 +180,7 @@ def test_validate_config_module_discovery_warns_for_unknown_package(tmp_path) ->
             modules_import_path: nonexistent.modules.package
         """)
     )
-    report, code = validate_config(str(cfg))
+    _report, code = validate_config(str(cfg))
     # Should not crash, may warn about missing package
     assert code in (0, 1)
 

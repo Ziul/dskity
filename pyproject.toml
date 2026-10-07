@@ -48,3 +48,6 @@ package-dir = {"" = "src"}
 where = ["src"]
 include = ["dskity*"]
 exclude = ["dskity.tests*"]
+
+[tool.ruff.lint]
+ignore = ["BLE001", "S110"]

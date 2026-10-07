@@ -8,7 +8,6 @@ from fastapi.testclient import TestClient
 from dskity.config.settings import DSkitySettings
 from dskity.testing import create_test_app, create_test_client, create_test_settings
 
-
 # ── create_test_settings ──────────────────────────────────────────────────────
 
 def test_create_test_settings_returns_dskity_settings() -> None:
@@ -47,6 +46,14 @@ def test_create_test_app_with_settings_uses_name() -> None:
     app = create_test_app(settings)
     assert isinstance(app, FastAPI)
     assert app.title == "billing-svc"
+
+
+def test_create_test_app_disables_fastapi_telemetry_auto_config(monkeypatch) -> None:
+    monkeypatch.setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4317")
+
+    app = create_test_app()
+
+    assert app._telemetry["auto_configure"] is False
 
 
 def test_create_test_app_root_endpoint_responds() -> None:

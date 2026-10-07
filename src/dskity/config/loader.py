@@ -75,7 +75,7 @@ def _read_config_file(path: str | Path, *, optional: bool = False) -> dict[str, 
             data = yaml.safe_load(f) or {}
 
     if not isinstance(data, dict):
-        raise ValueError(f"Config must be a top-level mapping: {path}")
+        raise TypeError(f"Config must be a top-level mapping: {path}")
     return _expand_environment_variables(data)
 
 

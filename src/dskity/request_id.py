@@ -6,7 +6,6 @@ from typing import Final
 
 from fastapi import FastAPI
 
-
 REQUEST_ID_HEADER: Final[str] = "X-Request-Id"
 
 _request_id_ctx: ContextVar[str | None] = ContextVar("request_id", default=None)

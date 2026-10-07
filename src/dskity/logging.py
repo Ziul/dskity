@@ -4,7 +4,7 @@ import json
 import logging
 import logging.config
 import os
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from dskity.request_id import get_request_id
@@ -22,7 +22,7 @@ class JsonFormatter(logging.Formatter):
 
     def format(self, record: logging.LogRecord) -> str:
         # Format timestamp with milliseconds
-        dt = datetime.fromtimestamp(record.created)
+        dt = datetime.fromtimestamp(record.created, tz=UTC)
         timestamp = dt.strftime("%Y-%m-%dT%H:%M:%S") + f".{int(record.msecs):03d}Z"
 
         return json.dumps(
@@ -54,7 +54,7 @@ class LogfmtFormatter(logging.Formatter):
 
     def format(self, record: logging.LogRecord) -> str:
         # Format timestamp with milliseconds
-        dt = datetime.fromtimestamp(record.created)
+        dt = datetime.fromtimestamp(record.created, tz=UTC)
         timestamp = dt.strftime("%Y-%m-%dT%H:%M:%S") + f".{int(record.msecs):03d}Z"
 
         message = record.getMessage()

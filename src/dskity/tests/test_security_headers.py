@@ -10,7 +10,6 @@ from fastapi.testclient import TestClient
 
 from dskity.security_headers import SecurityHeadersMiddleware
 
-
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _make_settings(**kwargs):

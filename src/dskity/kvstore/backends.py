@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 import socket
 import time
@@ -9,7 +10,7 @@ import urllib.parse
 from dataclasses import dataclass
 from threading import RLock
 from typing import Any, Protocol
-import logging
+
 from dskity.config.settings import DSkitySettings
 
 try:
@@ -90,7 +91,7 @@ class InMemoryKVBackend(KVBackend):
 
             if not prefix:
                 return sorted(self._data.keys())
-            return sorted(k for k in self._data.keys() if k.startswith(prefix))
+            return sorted(k for k in self._data if k.startswith(prefix))
 
 
 @dataclass
@@ -110,7 +111,7 @@ class RedisKVBackend(KVBackend):
         return prefix
 
     @classmethod
-    def from_config(cls, config: DSkitySettings) -> "RedisKVBackend":
+    def from_config(cls, config: DSkitySettings) -> RedisKVBackend:
         if redis is None:
             raise RuntimeError(
                 "Redis dependency not installed. Install with: uv sync --extra kvstore-redis"
@@ -227,7 +228,7 @@ class ConsulKVBackend(KVBackend):
         return prefix + "/"
 
     @classmethod
-    def from_config(cls, config: DSkitySettings) -> "ConsulKVBackend":
+    def from_config(cls, config: DSkitySettings) -> ConsulKVBackend:
         if consul is None:
             raise RuntimeError(
                 "Consul client dependency 'python-consul2' not installed. Install with: uv sync --extra kvstore-consul"
@@ -388,7 +389,7 @@ class AsyncRedisKVBackend:
         return prefix
 
     @classmethod
-    def from_config(cls, config: DSkitySettings) -> "AsyncRedisKVBackend":
+    def from_config(cls, config: DSkitySettings) -> AsyncRedisKVBackend:
         if redis_async is None:
             raise RuntimeError(
                 "Redis async dependency not installed. Install with: pip install redis>=4.2"

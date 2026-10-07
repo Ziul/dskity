@@ -56,13 +56,13 @@ def services_html(request: Request) -> HTMLResponse:
             status_code=200,
         )
 
-    now = dt.datetime.now(dt.timezone.utc)
+    now = dt.datetime.now(dt.UTC)
     rows = reg.aggregate_services(now=int(now.timestamp()))
 
     def fmt_ts(ts: int | None) -> str:
         if not ts:
             return "-"
-        return dt.datetime.fromtimestamp(ts, tz=dt.timezone.utc).isoformat()
+        return dt.datetime.fromtimestamp(ts, tz=dt.UTC).isoformat()
 
     def fmt_age(age: int | None) -> str:
         if age is None:
@@ -219,7 +219,7 @@ def config_html(request: Request) -> HTMLResponse:
 
         return "".join(items)
 
-    now = dt.datetime.now(dt.timezone.utc)
+    now = dt.datetime.now(dt.UTC)
     body = render_dict(config_dict)
 
     page = f"""<!doctype html>

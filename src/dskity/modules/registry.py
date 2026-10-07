@@ -3,8 +3,8 @@ from __future__ import annotations
 import importlib
 import logging
 import pkgutil
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Iterable
 
 from dskity.config.settings import DSkitySettings
 from dskity.modules.contracts import Module
@@ -17,7 +17,7 @@ class ModuleRegistry:
     modules: tuple[Module, ...]
 
     @classmethod
-    def from_package(cls, package: str) -> "ModuleRegistry":
+    def from_package(cls, package: str) -> ModuleRegistry:
         imported = importlib.import_module(package)
         discovered: list[Module] = []
 

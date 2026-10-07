@@ -1,8 +1,10 @@
+import logging
 import os
 import socket
-import logging
 from typing import Any
 from urllib.parse import urlparse
+
+logger = logging.getLogger(__name__)
 
 
 def _is_wildcard(host: str | None) -> bool:
@@ -64,14 +66,14 @@ def get_local_ip() -> str:
         if local_ip and not _is_wildcard(local_ip):
             return local_ip
     except OSError as e:
-        logging.debug("UDP route-lookup failed while fetching local IP: %s", e)
+        logger.debug("UDP route-lookup failed while fetching local IP: %s", e)
 
     try:
         hostname_ip = socket.gethostbyname(socket.gethostname())
         if hostname_ip and not hostname_ip.startswith("127.") and not _is_wildcard(hostname_ip):
             return hostname_ip
     except OSError as e:
-        logging.debug("Hostname resolution failed while fetching local IP: %s", e)
+        logger.debug("Hostname resolution failed while fetching local IP: %s", e)
 
     try:
         for info in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET):
@@ -79,13 +81,13 @@ def get_local_ip() -> str:
             if candidate and not candidate.startswith("127.") and not _is_wildcard(candidate):
                 return candidate
     except OSError as e:
-        logging.debug("Address-info scan failed while fetching local IP: %s", e)
+        logger.debug("Address-info scan failed while fetching local IP: %s", e)
 
     fallback = os.getenv("DSKITY_HOST", "")
     if fallback and not _is_wildcard(fallback):
         return fallback
 
-    logging.warning(
+    logger.warning(
         "Could not determine a routable local IP; falling back to 0.0.0.0. "
         "Service discovery URLs for this instance will be invalid. "
         "Set DSKITY_ADVERTISE_HOST (e.g. from the Kubernetes Downward API "

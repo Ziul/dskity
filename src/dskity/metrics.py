@@ -5,9 +5,7 @@ from typing import Any
 
 from fastapi import APIRouter, FastAPI, Request
 from fastapi.responses import PlainTextResponse
-
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
-
 
 _HTTP_REQUESTS_TOTAL = Counter(
     "http_requests_total",

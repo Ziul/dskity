@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from fastapi import APIRouter
 
@@ -13,7 +13,12 @@ from .config import SecondModuleSettings
 
 @dataclass(frozen=True)
 class SecondModuleModule(Module):
-    meta: ModuleMeta = ModuleMeta(name="second_module", base_path="/second_module")
+    meta: ModuleMeta = field(
+        default_factory=lambda: ModuleMeta(
+            name="second_module",
+            base_path="/second_module",
+        )
+    )
 
     def additional_settings_model(self):
         return SecondModuleSettings

@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 import re
+from dataclasses import dataclass
 from typing import Any, Protocol
 
 from fastapi import FastAPI
 from fastapi.routing import APIRoute
 from pydantic import BaseModel
+
 from dskity import DSkitySettings
 
 
@@ -124,7 +125,7 @@ class _ModuleHttpClient:
     routes: tuple[_RouteSpec, ...]
 
     @classmethod
-    def from_module(cls, app: FastAPI, meta: ModuleMeta) -> "_ModuleHttpClient":
+    def from_module(cls, app: FastAPI, meta: ModuleMeta) -> _ModuleHttpClient:
         specs: list[_RouteSpec] = []
         used_names: set[str] = set()
         method_priority = ["GET", "POST", "PUT", "PATCH", "DELETE"]

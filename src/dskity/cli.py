@@ -1,20 +1,19 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
 import importlib
 import logging
 import os
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Annotated
 
-from dotenv import load_dotenv
-
-from click.core import ParameterSource
-from click.exceptions import ClickException, Exit
 import typer
 import uvicorn
+from click.core import ParameterSource
+from click.exceptions import ClickException, Exit
+from dotenv import load_dotenv
 
-from dskity.config.loader import resolve_config_path, _read_config_file
+from dskity.config.loader import _read_config_file, resolve_config_path
 from dskity.logging import configure_logging
 
 logger = logging.getLogger(__name__)
@@ -229,11 +228,13 @@ def _merge_run_options(ctx: typer.Context, current: RunOptions) -> RunOptions:
         return current
 
     merged = replace(base)
+    defaults = RunOptions()
     sources = {
         "config_path": current.config_path,
         "host": current.host,
         "port": current.port,
         "log_level": current.log_level,
+        "log_format": current.log_format,
         "advertise_url": current.advertise_url,
         "targets": current.targets,
         "reload_dirs": current.reload_dirs,
@@ -241,8 +242,14 @@ def _merge_run_options(ctx: typer.Context, current: RunOptions) -> RunOptions:
     }
 
     for field_name, value in sources.items():
-        if ctx.get_parameter_source(field_name) == ParameterSource.COMMANDLINE:
-            setattr(merged, field_name, value)
+        parsed = ctx.params.get(field_name, value)
+        if field_name in {"targets", "reload_dirs"} and not parsed:
+            parsed = None
+        if (
+            ctx.get_parameter_source(field_name) == ParameterSource.COMMANDLINE
+            or parsed != getattr(defaults, field_name)
+        ):
+            setattr(merged, field_name, parsed)
 
     return merged
 
@@ -451,7 +458,7 @@ def _cmd_run(options: RunOptions) -> int:
 
 def _cmd_init(module_name: str, target_path: str) -> int:
     """Scaffold a new module under the given path."""
-    from dskity.scaffold import scaffold_module, _to_pascal_case
+    from dskity.scaffold import _to_pascal_case, scaffold_module
 
     module_name = module_name.strip()
 
@@ -483,9 +490,9 @@ def _cmd_list(config_path: str | None, output_json: bool) -> int:
 
     # Resolve module search packages (reuse bootstrap logic)
     from dskity.bootstrap import (
+        _install_modules_search_paths,
         _resolve_modules_import_packages,
         _resolve_modules_search_paths,
-        _install_modules_search_paths,
     )
 
     search_paths = _resolve_modules_search_paths(config, resolved_config_path)
@@ -575,7 +582,7 @@ def _cmd_validate(config_path: str | None, strict: bool, output_json: bool) -> i
     """Validate configuration and module discovery."""
     import json as _json
 
-    from dskity.validate import validate_config, CheckStatus
+    from dskity.validate import CheckStatus, validate_config
 
     report, exit_code = validate_config(config_path, strict=strict)
 

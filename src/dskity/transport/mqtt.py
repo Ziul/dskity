@@ -5,8 +5,9 @@ from __future__ import annotations
 import asyncio
 import logging
 import ssl
-from typing import Callable
+from collections.abc import Callable
 from concurrent.futures import Future
+
 from pydantic import SecretStr
 
 try:

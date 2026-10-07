@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
@@ -15,7 +15,9 @@ from dskity.registry.store import RegistryStore
 
 @dataclass(frozen=True)
 class KvStoreModule(Module):
-    meta: ModuleMeta = ModuleMeta(name="kvstore", base_path="")
+    meta: ModuleMeta = field(
+        default_factory=lambda: ModuleMeta(name="kvstore", base_path="")
+    )
 
     def register(self, clients: Any, config: DSkitySettings) -> None:
         app = getattr(clients, "http", None)

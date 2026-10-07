@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+
 from fastapi import FastAPI
 from fastapi.openapi.utils import get_openapi
 
@@ -19,6 +20,7 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title="dskity",
         security=[{"HTTPBearer": []}],
+        telemetry={"auto_configure": False},
     )
     
     # Store logger in app.state for consistent access throughout the application

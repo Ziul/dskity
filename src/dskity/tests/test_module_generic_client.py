@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from fastapi import APIRouter, FastAPI
@@ -63,7 +63,9 @@ class _FakeResolver:
 
 @dataclass(frozen=True)
 class DemoModule(Module):
-    meta: ModuleMeta = ModuleMeta(name="demo", base_path="/demo")
+    meta: ModuleMeta = field(
+        default_factory=lambda: ModuleMeta(name="demo", base_path="/demo")
+    )
 
     def additional_settings_model(self):
         return None
@@ -94,7 +96,9 @@ class DemoModule(Module):
 
 @dataclass(frozen=True)
 class CollisionModule(Module):
-    meta: ModuleMeta = ModuleMeta(name="collision", base_path="/collision")
+    meta: ModuleMeta = field(
+        default_factory=lambda: ModuleMeta(name="collision", base_path="/collision")
+    )
 
     def additional_settings_model(self):
         return None

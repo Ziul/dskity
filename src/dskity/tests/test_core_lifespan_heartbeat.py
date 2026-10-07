@@ -11,10 +11,10 @@ from dskity.app import create_app
 def test_lifespan_starts_and_stops_heartbeat(monkeypatch) -> None:
     calls: list[str] = []
 
-    def fake_start_heartbeat(app, *, cfg):  # noqa: ANN001
+    def fake_start_heartbeat(app, *, cfg):
         calls.append(f"start:{cfg.ttl_seconds}:{cfg.interval_seconds}")
 
-    async def fake_stop_heartbeat(app):  # noqa: ANN001
+    async def fake_stop_heartbeat(app):
         calls.append("stop")
 
     monkeypatch.setattr(bootstrap_mod, "start_heartbeat", fake_start_heartbeat)

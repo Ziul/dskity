@@ -90,6 +90,7 @@ def create_test_app(
         A bootstrapped FastAPI app.
     """
     import logging
+
     from dskity.bootstrap import bootstrap
     from dskity.logging import configure_logging
 
@@ -100,7 +101,10 @@ def create_test_app(
         os.environ["DSKITY_CONFIG"] = cfg_path
         try:
             configure_logging(level="WARNING", log_format="text")
-            app = FastAPI(title=svc_name)
+            app = FastAPI(
+                title=svc_name,
+                telemetry={"auto_configure": False},
+            )
             app.state.logger = logging.getLogger("dskity")
             bootstrap(app)
         finally:
@@ -113,7 +117,7 @@ def create_test_app(
 
 
 def create_test_client(
-    app_or_settings: "FastAPI | DSkitySettings | None" = None,
+    app_or_settings: FastAPI | DSkitySettings | None = None,
     **client_kwargs: Any,
 ) -> _TestClient:
     """Create a :class:`~fastapi.testclient.TestClient` for a dskity app.

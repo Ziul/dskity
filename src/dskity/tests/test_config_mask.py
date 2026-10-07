@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-
 from dskity.config.mask import MASK, mask_secrets
-
 
 # ── Basic key-based masking ───────────────────────────────────────────────────
 

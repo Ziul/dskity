@@ -24,4 +24,4 @@ def test_logging_filter_injects_request_id() -> None:
         _request_id_ctx.reset(token)
 
     assert ok is True
-    assert getattr(record, "request_id") == "rid-xyz"
+    assert record.request_id == "rid-xyz"
