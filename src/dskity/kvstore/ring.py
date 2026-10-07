@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 from dataclasses import dataclass
 from typing import Any
+from urllib.parse import urlsplit, urlunsplit
 
 from dskity.config.settings import DSkitySettings
 from dskity.kvstore.backends import generate_node_id
@@ -13,6 +14,33 @@ from dskity.registry.service_registry import ServiceRegistry
 class RingNode:
     id: str
     base_url: str
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "base_url", normalize_ring_base_url(self.base_url))
+
+
+def normalize_ring_base_url(value: str) -> str:
+    parsed = urlsplit(value.strip())
+    if parsed.scheme.lower() not in {"http", "https"} or not parsed.hostname:
+        raise ValueError("Ring node base_url must be an absolute HTTP(S) URL")
+    if parsed.username or parsed.password or parsed.query or parsed.fragment:
+        raise ValueError(
+            "Ring node base_url must not contain credentials, query, or fragment"
+        )
+    try:
+        _port = parsed.port
+    except ValueError as exc:
+        raise ValueError("Ring node base_url contains an invalid port") from exc
+
+    return urlunsplit(
+        (
+            parsed.scheme.lower(),
+            parsed.netloc,
+            parsed.path.rstrip("/"),
+            "",
+            "",
+        )
+    )
 
 
 class HashRing:

@@ -2,13 +2,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Any
+from urllib.parse import quote
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import RedirectResponse
 
 from dskity.config.settings import DSkitySettings
 from dskity.kvstore.backends import backend_from_config
-from dskity.kvstore.ring import ring_from_runtime
+from dskity.kvstore.ring import normalize_ring_base_url, ring_from_runtime
 from dskity.modules.contracts import Module, ModuleMeta
 from dskity.registry.store import RegistryStore
 
@@ -45,8 +46,19 @@ class KvStoreModule(Module):
                 return None
             if owner.id == node_id:
                 return None
+            try:
+                owner_base_url = normalize_ring_base_url(owner.base_url)
+            except ValueError as exc:
+                raise HTTPException(
+                    status_code=503,
+                    detail="invalid_owner_base_url",
+                ) from exc
             # 307 preserves method and body (also for PUT/DELETE).
-            return RedirectResponse(url=f"{owner.base_url}/kv/{key}", status_code=307)
+            encoded_key = quote(key, safe="")
+            return RedirectResponse(
+                url=f"{owner_base_url}/kv/{encoded_key}",
+                status_code=307,
+            )
 
         @router.get("/kv/ring")
         def ring_info() -> dict:
