@@ -59,6 +59,17 @@ def test_bootstrap_exposes_root_metrics_and_request_id_and_service_name() -> Non
     assert "X-Request-Id" in r_metrics.headers
 
 
+def test_app_preserves_bearer_scheme_without_constructor_security() -> None:
+    app = create_app()
+    schema = app.openapi()
+    bearer = schema["components"]["securitySchemes"]["HTTPBearer"]
+    assert bearer["type"] == "http"
+    assert bearer["scheme"] == "bearer"
+    assert bearer["description"]
+    assert app.openapi() is schema
+    assert app._telemetry["auto_configure"] is False
+
+
 def test_resolve_modules_search_paths_includes_cwd_app_dir_and_extras(
     tmp_path: Path, monkeypatch
 ) -> None:

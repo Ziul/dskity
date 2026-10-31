@@ -16,10 +16,8 @@ def create_app() -> FastAPI:
     if not root_logger.handlers:
         configure_logging()
 
-    # Add HTTPBearer security scheme to enable auth header input in Swagger UI
     app = FastAPI(
         title="dskity",
-        security=[{"HTTPBearer": []}],
         telemetry={"auto_configure": False},
     )
     
