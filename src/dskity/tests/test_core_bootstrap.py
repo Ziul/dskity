@@ -254,6 +254,15 @@ def test_core_config_json_omits_none_values() -> None:
     assert "null" not in resp.text
 
 
+def test_core_registry_routes_are_hidden_from_openapi() -> None:
+    client = TestClient(create_app())
+
+    paths = client.get("/openapi.json").json()["paths"]
+
+    assert not any(p.startswith(("/_core", "/kv")) for p in paths)
+    assert client.get("/_core/config.json").status_code == 200
+
+
 def test_bootstrap_exposes_generic_module_clients_in_state() -> None:
     app = create_app()
 

@@ -14,9 +14,10 @@ common:
     show_config: true
   logging:
     format: text
-    level: "ERROR"
+    level: "DEBUG"
+    locals: true
   otel:
-    enabled: true
+    enabled: false
   mqtt:
     enabled: false
     broker: "mqtts://localhost"
