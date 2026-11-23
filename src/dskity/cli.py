@@ -409,7 +409,12 @@ def _cmd_run(options: RunOptions) -> int:
     # Publish resolved level so that bootstrap/modules read the same value
     os.environ["DSKITY_COMMON__LOGGING__LEVEL"] = log_level.upper()
     os.environ["DSKITY_COMMON__LOGGING__FORMAT"] = _log_format
-    log_config = configure_logging(level=log_level, log_format=_log_format)
+    _log_locals = _logging_cfg.get("locals")
+    log_config = configure_logging(
+        level=log_level,
+        log_format=_log_format,
+        log_locals=bool(_log_locals) if _log_locals is not None else None,
+    )
 
     # Determine reload directories from environment or CLI
     reload_dirs = None

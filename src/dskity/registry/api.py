@@ -35,6 +35,7 @@ router = APIRouter(
     prefix="/_core",
     tags=["core-registry"],
     dependencies=[Depends(verify_admin_access)],
+    include_in_schema=False,
 )
 
 

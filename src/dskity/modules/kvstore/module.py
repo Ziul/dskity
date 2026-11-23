@@ -38,7 +38,7 @@ class KvStoreModule(Module):
         # Reuse the global instance_id (if present) for consistency between modules.
         node_id = getattr(app.state, "instance_id", node_id)
 
-        router = APIRouter(tags=[self.meta.name])
+        router = APIRouter(tags=[self.meta.name], include_in_schema=False)
 
         def owner_redirect(key: str) -> RedirectResponse | None:
             owner = ring.owner_for_key(key)

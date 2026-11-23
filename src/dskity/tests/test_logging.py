@@ -5,10 +5,13 @@ import logging
 import re
 from io import StringIO
 
+from rich.console import Console
+
 from dskity.logging import (
     JsonFormatter,
     LogfmtFormatter,
     RequestIdFilter,
+    RichConsoleHandler,
     build_logging_config,
     configure_logging,
 )
@@ -332,9 +335,10 @@ class TestBuildLoggingConfig:
         """Verify text format configuration is built correctly."""
         config = build_logging_config(level="DEBUG", log_format="text")
 
-        # Check that uvicorn formatters are configured
-        assert config["formatters"]["default"]["()"] == "uvicorn.logging.DefaultFormatter"
-        assert config["formatters"]["access"]["()"] == "uvicorn.logging.AccessFormatter"
+        # Text format uses the Rich handler for every console handler
+        assert config["handlers"]["console"]["class"] == "dskity.logging.RichConsoleHandler"
+        assert config["handlers"]["access_console"]["class"] == "dskity.logging.RichConsoleHandler"
+        assert config["formatters"] == {}
 
     def test_build_logging_config_sets_log_level(self) -> None:
         """Verify log level is set correctly."""
@@ -396,7 +400,52 @@ class TestConfigureLogging:
         config_text = build_logging_config(level="INFO", log_format="TEXT")
 
         assert config_json["formatters"]["default"]["()"] == "dskity.logging.JsonFormatter"
-        assert config_text["formatters"]["default"]["()"] == "uvicorn.logging.DefaultFormatter"
+        assert config_text["handlers"]["console"]["class"] == "dskity.logging.RichConsoleHandler"
+
+
+class TestRichConsoleHandler:
+    """Test the default Rich console handler."""
+
+    @staticmethod
+    def _emit(request_id: str | None, msg: str = "hello [world]") -> str:
+        console = Console(file=StringIO(), width=120, force_terminal=False)
+        handler = RichConsoleHandler(console=console)
+        record = logging.LogRecord("dskity.test", logging.INFO, __file__, 1, msg, (), None)
+        if request_id is not None:
+            record.request_id = request_id
+        handler.emit(record)
+        return console.file.getvalue()
+
+    def test_renders_message_literally(self) -> None:
+        output = self._emit("-")
+        assert "INFO" in output
+        assert "hello [world]" in output
+
+    def test_prefixes_request_id_when_present(self) -> None:
+        assert "[req-123] hello" in self._emit("req-123")
+
+    def test_omits_placeholder_request_id(self) -> None:
+        assert "[-]" not in self._emit("-")
+        assert "[-]" not in self._emit(None)
+
+    def test_renders_traceback_without_crashing(self) -> None:
+        console = Console(file=StringIO(), width=120, force_terminal=False)
+        handler = RichConsoleHandler(console=console)
+        try:
+            raise ValueError("boom")
+        except ValueError:
+            import sys
+
+            record = logging.LogRecord("dskity.test", logging.ERROR, __file__, 1, "failed", (), sys.exc_info())
+        handler.emit(record)
+        assert "ValueError" in console.file.getvalue()
+
+    def test_configure_logging_installs_rich_handler_by_default(self) -> None:
+        configure_logging(level="INFO", log_format="text")
+        handlers = logging.getLogger("dskity").handlers
+        assert handlers and all(isinstance(h, RichConsoleHandler) for h in handlers)
+        configure_logging(level="INFO", log_format="json")
+        assert not any(isinstance(h, RichConsoleHandler) for h in logging.getLogger("dskity").handlers)
 
     def test_configure_logging_with_logfmt_format(self) -> None:
         """Verify configure_logging applies logfmt format correctly."""
@@ -492,7 +541,7 @@ class TestLoggingConfigurationFromSettings:
         """Verify default log format is 'text'."""
         config = build_logging_config(level="INFO", log_format="text")
 
-        assert config["formatters"]["default"]["()"] == "uvicorn.logging.DefaultFormatter"
+        assert config["handlers"]["console"]["class"] == "dskity.logging.RichConsoleHandler"
 
     def test_log_format_json_is_respected(self) -> None:
         """Verify JSON log format is respected."""
@@ -507,3 +556,33 @@ class TestLoggingConfigurationFromSettings:
 
         assert config["formatters"]["default"]["()"] == "dskity.logging.LogfmtFormatter"
         assert config["formatters"]["access"]["()"] == "dskity.logging.LogfmtFormatter"
+
+
+class TestLogLocals:
+    """log_locals shows the emitting frame's variables for DEBUG records only."""
+
+    @staticmethod
+    def _run(log_locals: bool, level: int) -> str:
+        console = Console(file=StringIO(), width=120, force_terminal=False)
+        handler = RichConsoleHandler(console=console, log_locals=log_locals)
+        logger = logging.getLogger(f"dskity.locals.{log_locals}.{level}")
+        logger.handlers = [handler]
+        logger.propagate = False
+        logger.setLevel(logging.DEBUG)
+        secret_marker = "visible-local-value"  # noqa: F841
+        logger.log(level, "msg")
+        return console.file.getvalue()
+
+    def test_debug_includes_locals(self) -> None:
+        assert "visible-local-value" in self._run(True, logging.DEBUG)
+
+    def test_info_excludes_locals(self) -> None:
+        assert "visible-local-value" not in self._run(True, logging.INFO)
+
+    def test_disabled_by_default(self) -> None:
+        assert "visible-local-value" not in self._run(False, logging.DEBUG)
+
+    def test_env_enables_flag(self, monkeypatch) -> None:
+        monkeypatch.setenv("DSKITY_COMMON__LOGGING__LOCALS", "true")
+        cfg = build_logging_config()
+        assert cfg["handlers"]["console"]["log_locals"] is True

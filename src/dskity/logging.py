@@ -4,8 +4,14 @@ import json
 import logging
 import logging.config
 import os
+import sys
 from datetime import UTC, datetime
 from typing import Any
+
+from rich.console import ConsoleRenderable, Group
+from rich.logging import RichHandler
+from rich.scope import render_scope
+from rich.text import Text
 
 from dskity.request_id import get_request_id
 
@@ -15,6 +21,42 @@ class RequestIdFilter(logging.Filter):
         request_id = get_request_id()
         record.request_id = request_id or "-"  # type: ignore[attr-defined]
         return True
+
+
+class RichConsoleHandler(RichHandler):
+    """Rich-based console handler, the default for the ``text`` log format.
+
+    Behaves like ``rich.logging.RichHandler`` (colored levels, aligned columns,
+    pretty tracebacks) and prefixes the message with the current request id
+    when there is one.
+    """
+
+    def __init__(self, *, log_locals: bool = False, **kwargs: Any) -> None:
+        kwargs.setdefault("rich_tracebacks", True)
+        kwargs.setdefault("omit_repeated_times", False)
+        super().__init__(**kwargs)
+        self.log_locals = log_locals
+
+    def render_message(self, record: logging.LogRecord, message: str) -> ConsoleRenderable:
+        renderable = super().render_message(record, message)
+        request_id = getattr(record, "request_id", None)
+        if request_id and request_id != "-" and isinstance(renderable, Text):
+            renderable = Text.assemble((f"[{request_id}] ", "dim cyan"), renderable)
+        if self.log_locals and record.levelno <= logging.DEBUG:
+            local_vars = _caller_locals(record)
+            if local_vars:
+                return Group(renderable, render_scope(local_vars, title="locals"))
+        return renderable
+
+
+def _caller_locals(record: logging.LogRecord) -> dict[str, Any] | None:
+    """Locals of the frame that emitted ``record`` (handlers run synchronously)."""
+    frame = sys._getframe(1)
+    while frame is not None:
+        if frame.f_code.co_filename == record.pathname and frame.f_lineno == record.lineno:
+            return {k: v for k, v in frame.f_locals.items() if not k.startswith("__")}
+        frame = frame.f_back  # type: ignore[assignment]
+    return None
 
 
 class JsonFormatter(logging.Formatter):
@@ -86,19 +128,19 @@ def _format_from_env(default: str = "text") -> str:
     return (os.getenv("DSKITY_COMMON__LOGGING__FORMAT") or default).lower()
 
 
-def build_logging_config(*, level: str | None = None, log_format: str | None = None) -> dict[str, Any]:
+def _locals_from_env() -> bool:
+    return (os.getenv("DSKITY_COMMON__LOGGING__LOCALS") or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def build_logging_config(
+    *, level: str | None = None, log_format: str | None = None, log_locals: bool | None = None
+) -> dict[str, Any]:
     lvl = (level or _level_from_env()).upper()
+    show_locals = _locals_from_env() if log_locals is None else log_locals
     fmt = (log_format or _format_from_env()).lower()
 
     use_json = fmt == "json"
     use_logfmt = fmt == "logfmt"
-
-    default_fmt = (
-        "%(asctime)s %(levelname)s %(name)s request_id=%(request_id)s - %(message)s"
-    )
-    access_fmt = (
-        "%(asctime)s %(levelname)s %(name)s request_id=%(request_id)s - %(message)s"
-    )
 
     if use_json:
         formatters: dict[str, Any] = {
@@ -119,17 +161,27 @@ def build_logging_config(*, level: str | None = None, log_format: str | None = N
             },
         }
     else:
-        formatters = {
-            "default": {
-                "()": "uvicorn.logging.DefaultFormatter",
-                "fmt": default_fmt,
-                "use_colors": None,
-            },
-            "access": {
-                "()": "uvicorn.logging.AccessFormatter",
-                "fmt": access_fmt,
-                "use_colors": None,
-            },
+        # Rich handlers render the whole record themselves, so no formatter is needed.
+        formatters = {}
+
+    if use_json or use_logfmt:
+        handlers: dict[str, Any] = {
+            name: {
+                "class": "logging.StreamHandler",
+                "formatter": formatter,
+                "filters": ["request_id"],
+                "stream": "ext://sys.stdout",
+            }
+            for name, formatter in (("console", "default"), ("access_console", "access"))
+        }
+    else:
+        handlers = {
+            name: {
+                "class": "dskity.logging.RichConsoleHandler",
+                "filters": ["request_id"],
+                "log_locals": show_locals,
+            }
+            for name in ("console", "access_console")
         }
 
     return {
@@ -139,20 +191,7 @@ def build_logging_config(*, level: str | None = None, log_format: str | None = N
             "request_id": {"()": "dskity.logging.RequestIdFilter"},
         },
         "formatters": formatters,
-        "handlers": {
-            "console": {
-                "class": "logging.StreamHandler",
-                "formatter": "default",
-                "filters": ["request_id"],
-                "stream": "ext://sys.stdout",
-            },
-            "access_console": {
-                "class": "logging.StreamHandler",
-                "formatter": "access",
-                "filters": ["request_id"],
-                "stream": "ext://sys.stdout",
-            },
-        },
+        "handlers": handlers,
         "root": {
             "level": lvl,
             "handlers": ["console"],
@@ -181,7 +220,9 @@ def build_logging_config(*, level: str | None = None, log_format: str | None = N
     }
 
 
-def configure_logging(*, level: str | None = None, log_format: str | None = None) -> dict[str, Any]:
-    cfg = build_logging_config(level=level, log_format=log_format)
+def configure_logging(
+    *, level: str | None = None, log_format: str | None = None, log_locals: bool | None = None
+) -> dict[str, Any]:
+    cfg = build_logging_config(level=level, log_format=log_format, log_locals=log_locals)
     logging.config.dictConfig(cfg)
     return cfg
